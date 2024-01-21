@@ -92,13 +92,10 @@ FrhoR = np.empty(RES + 2 * no_ghosts) # density flux left cell boundary
 FrhovR = np.empty(RES + 2 * no_ghosts) # momentum flux left cell boundary
 FER = np.empty(RES + 2 * no_ghosts) # energy flux left cell boundary
 
-FrhoHLL = np.empty(RES + 2 * no_ghosts) # density flux left cell boundary
-FrhovHLL = np.empty(RES + 2 * no_ghosts) # momentum flux left cell boundary
-FEHLL = np.empty(RES + 2 * no_ghosts) # energy flux left cell boundary
-
 pstar = np.empty(RES + 2 * no_ghosts) # p-star from HLL method
 SL = np.empty(RES + 2 * no_ghosts) # left wave speed left cell boundary
 SR = np.empty(RES + 2 * no_ghosts) # right wave speed left cell boundary
+Sstar = np.empty(RES + 2 * no_ghosts) # S_star from HLLC method
 
 sa = np.empty(RES + 2 * no_ghosts) # 'raw' slopes, no minmod applied
 sb = np.empty(RES + 2 * no_ghosts) # 'raw' slopes, no minmod applied
@@ -209,6 +206,7 @@ def set_LR_states(RK = 0):
   print ("rhovL:", rhovL)
   print ("rhoL:", rhoL)
   """
+  
 
 def set_flux(RK = 0):
   # set states immediately to left and right of cell boundary.
@@ -256,20 +254,60 @@ def set_flux(RK = 0):
   SR[entries] = vR[entries] + csR[entries] * np.sqrt(1 + (gamma + 1) / 
     (2. * gamma) * (pstar[entries]/pR[entries] - 1))
   
+  # HLLC specific, set Sstar
+  Sstar[flux_entries] = (pR[flux_entries] - pL[flux_entries] 
+    + rhoL[flux_entries] * vL[flux_entries] * 
+    (SL[flux_entries] - vL[flux_entries]) 
+    - rhoR[flux_entries] * vR[flux_entries] *
+    (SR[flux_entries] - vR[flux_entries])) / (
+    rhoL[flux_entries] * (SL[flux_entries] - vL[flux_entries])
+    - rhoR[flux_entries] * (SR[flux_entries] - vR[flux_entries]))
+  
   # set flux across boundary option one, both waves move to the right
-  entries = flux_entries & (SL > 0) & (SR > 0)
+  entries = flux_entries & (SL > 0)
+  #print("both right:", entries)
   Frho[entries] = FrhoL[entries]
   Frhov[entries] = FrhovL[entries]
   FE[entries] = FEL[entries]
   
   # set flux across boundary option two, both waves move to the left 
-  entries = flux_entries & (SL < 0) & (SR < 0)
+  entries = flux_entries & (SR < 0)
+  #print("both left:", entries)
   Frho[entries] = FrhoR[entries]
   Frhov[entries] = FrhovR[entries]
   FE[entries] = FER[entries]
+
   
+  # set flux across boundary option three, left starred HLLC state
+  entries = ~(SL > 0) & ~(SR < 0) & (Sstar > 0) & flux_entries
+  #print("HLLC left:", entries)
+  Frho[entries] = FrhoL[entries] + SL[entries] * ( rhoL[entries] * 
+    (SL[entries] - vL[entries]) / (SL[entries] - Sstar[entries]) - 
+    rhoL[entries])
+  Frhov[entries] = FrhovL[entries] + SL[entries] * (rhoL[entries] *
+    (SL[entries] - vL[entries])/(SL[entries] - Sstar[entries]) * Sstar[entries] 
+    - rhovL[entries])
+  FE[entries] = (FEL[entries] + SL[entries] * (Sstar[entries] - vL[entries]) /
+    (SL[entries] - Sstar[entries]) * (EL[entries] + pL[entries] + rhoL[entries]
+    * Sstar[entries] * (SL[entries] - vL[entries]))) 
+     
+  # set flux across boundary option four, right starred HLLC state
+  entries = ~(SL > 0) & ~(SR < 0) & ~(Sstar > 0) & flux_entries
+  #print("HLLC right:", entries)
+  Frho[entries] = FrhoR[entries] + SR[entries] * ( rhoR[entries] * 
+    (SR[entries] - vR[entries]) / (SR[entries] - Sstar[entries]) - 
+    rhoR[entries])
+  Frhov[entries] = FrhovR[entries] + SR[entries] * (rhoR[entries] *
+    (SR[entries] - vR[entries])/(SR[entries] - Sstar[entries]) * Sstar[entries] 
+    - rhovR[entries])
+  FE[entries] = (FER[entries] + SR[entries] * (Sstar[entries] - vR[entries]) /
+    (SR[entries] - Sstar[entries]) * (ER[entries] + pR[entries] + rhoR[entries]
+    * Sstar[entries] * (SR[entries] - vR[entries]))) 
+  
+  """
   # set flux across boundary option three, draw upon starred HLL state
-  entries = ~((SL > 0) & (SR > 0)) & ~((SL < 0) & (SR < 0)) & flux_entries
+  entries = ~(SL > 0) & ~(SR < 0) & flux_entries
+  #print("HLL", entries)
   Frho[entries] = (SR[entries] * FrhoL[entries] - SL[entries] * FrhoR[entries]
     + SR[entries] * SL[entries] * (rhoR[entries] - rhoL[entries])) / (
     SR[entries] - SL[entries])
@@ -279,13 +317,17 @@ def set_flux(RK = 0):
   FE[entries] = (SR[entries] * FEL[entries] - SL[entries] * FER[entries]
     + SR[entries] * SL[entries] * (ER[entries] - EL[entries])) / (
     SR[entries] - SL[entries])
-    
-  #print ("Frho:", Frho)
-  #print ("FrhoL:", FrhoL)
-  #print ("FrhoR:", FrhoR)
-  #print ("SL:", SL)
-  #print ("SR:", SR)
+  """
+  
+  """
+  print ("Frho:", Frho)
+  print ("FrhoL:", FrhoL)
+  print ("FrhoR:", FrhoR)
+  print ("SL:", SL)
+  print ("SR:", SR)
+  print ("Sstar:", Sstar)
   #print ("------")
+  """
 
 def set_dt():
   # set the allowed timestep according to CFL condition
@@ -299,71 +341,51 @@ def set_dt():
     finished = True
 
 def update_grid(RKstep = -1):
-  
+
   if RKstep == -1: # revert to Forward Euler
     rho[i0:i1, 0] = rho[i0:i1, 0] - dt / dx * (Frho[i0+1:i1+1] - Frho[i0:i1])
     rhov[i0:i1, 0] = rhov[i0:i1, 0] - dt/dx * (Frhov[i0+1:i1+1] - Frhov[i0:i1])
     E[i0:i1, 0] = E[i0:i1, 0] - dt / dx * (FE[i0+1:i1+1] - FE[i0:i1])
   
-  # Third-order RK scheme for function dy/dt = f(t, y):
+  # Second-order RK scheme for function dy/dt = f(t, y):
   # 
-  # tableau: 0   | 0    0    0        c_0 | a_00 a_01 a_02
-  #          1   | 1    0    0        c_1 | a_10 a_11 a_12
-  #          1/2 | 1/4  1/4  0        c_2 | a_20 a_21 a_22
-  #          ----+---------------    -----+----------------
-  #              | 1/6  1/6  2/3          | b_0  b_1  b_2
+  # tableau: 0   | 0    0         c_0 | a_00 a_01
+  #          1/2 | 1/2  0         c_1 | a_10 a_11 
+  #          ----+---------      -----+-----------
+  #              | 0    1             | b_0  b_1
   #
   # y_{n+1} = y_n + h SUM_{i=0}^1 b_i k_i
   #
   # k_i = f( t_n + c_i h, y_n + h SUM_{j=0}^{i-1} a_ij k_j
   # 
-  # in our case, f not a direct function of t, so c_i will not be needed
+  # in our case, f not a direct function of t, so c_0, c_1 will not be needed
   # I start counting all indices at zero, not one, to connect to programming
   # 
-  # k_0 = f( y_n )
-  # k_1 = f( y_n + h a_10 k_0 ) = f( y_n + h k_0 )
-  # k_2 = f( y_n + h a_20 k_0 + h a_21 k_1 ) = f( y_n + (h/4) k_0 + (h/4) k_1 )
+  # k_0 = f( t_n, y_n ) -> k_0 = f( y_n) 
+  # k_1 = f( t_n + c_1 h, y_n + h a_10 k_0 ) 
+  #     = f( t_n + h / 2, y_n + h (1/2) k_0 ) -> f( y_n + h (1/2) k_0 )
   #
-  # Y_{n+1} = y_n + h b_0 k_0 + h b_1 k_1 + h b_2 k_2 
-  #         = y_n + (h/6) k_0 + (h/6) k_1 + (2h/3) k_2
+  # y_{n+1} = y_n + h b_0 k_0 + h b_1 k_1 = y_n + h k_1
   #
   # In terms of intermediate states Q: 
   # Q_0 = y_n
-  # k_0 = f( Q_0 )                             RK = 0 in set_flux routine
-  # Q_1 = Q_0 + h f( Q_0 )                     RKstep == 0 below
-  # k_1 = f( Q_1 )                             RK = 1 in set flux routine
-  # Q_2 = Q_0 + (h/4) k_0 + (h/4) k_1          
-  #     = (3/4) Q_0 + (1/4) Q_1 + (h/4) k_1    RKstep == 1 below
-  # k_2 = f( Q_2 )                             RK = 2 in set flux routine
-  # 
-  # y_{n+1} = Q_0 + (h/6) k_0 + (h/6) k_1 + (2h/3) k_2  
-  #         = (1/3) Q_0 + (2/3) Q_2 + (2h/3) f( Q_2 )      RKstep == 2 below
-  #
-  # We've used k_0 = (Q_1 - Q_0) / h and k_1 = (4 Q_2 - 3 Q_0 - Q_1) / h
-  # to eliminate these terms from the equations for Q_2 and y_{n+1}, since we
-  # are only storing the most recent set of fluxes at a given time
+  # k_0 = f( Q_0 )                RK = 0 in set_flux routine
+  # Q_1 = Q_0 + (h/2) f( Q_0 )    RKstep == 0 below
+  # k_1 = f( Q_1 )                RK = 1 in set flux routine
+  # y_{n+1} = Q_0 + h f ( Q_1 )   RKstep == 1 below
   
-  if RKstep == 0: # first out of three-step third-order RK scheme
-    rho[i0:i1, 1] = rho[i0:i1, 0] - dt / dx * (Frho[i0+1:i1+1] - Frho[i0:i1])
-    rhov[i0:i1, 1] = rhov[i0:i1, 0] - dt/dx * (Frhov[i0+1:i1+1] - Frhov[i0:i1])
-    E[i0:i1, 1] = E[i0:i1, 0] - dt / dx * (FE[i0+1:i1+1] - FE[i0:i1])
+  if RKstep == 0: # first out of two-step second order RK scheme
+    rho[i0:i1, 1] = (rho[i0:i1, 0] - 
+      0.5 * dt / dx * (Frho[i0+1:i1+1] - Frho[i0:i1]))
+    rhov[i0:i1, 1] = (rhov[i0:i1, 0] - 
+      0.5 * dt / dx * (Frhov[i0+1:i1+1] - Frhov[i0:i1]))
+    E[i0:i1, 1] = E[i0:i1, 0] - 0.5 * dt / dx * (FE[i0+1:i1+1] - FE[i0:i1])
     
-  if RKstep == 1: # second out of three-step third order RK scheme
-    rho[i0:i1, 2] = (0.75 * rho[i0:i1, 0] + 0.25 * rho[i0:i1, 1]
-        - 0.25 * dt / dx * (Frho[i0+1:i1+1] - Frho[i0:i1]))
-    rhov[i0:i1, 2] = (0.75 * rhov[i0:i1, 0] + 0.25 * rhov[i0:i1, 1]
-        - 0.25 * dt / dx * (Frhov[i0+1:i1+1] - Frhov[i0:i1]))
-    E[i0:i1, 2] = (0.75 * E[i0:i1, 0] + 0.25 * E[i0:i1, 1] 
-        - 0.25 * dt / dx * (FE[i0+1:i1+1] - FE[i0:i1]))
+  if RKstep == 1: # second out of two-step second order RK scheme
+    rho[i0:i1, 0] = rho[i0:i1, 0] - dt / dx * (Frho[i0+1:i1+1] - Frho[i0:i1])
+    rhov[i0:i1, 0] = rhov[i0:i1, 0] - dt/dx * (Frhov[i0+1:i1+1] - Frhov[i0:i1])
+    E[i0:i1, 0] = E[i0:i1, 0] - dt / dx * (FE[i0+1:i1+1] - FE[i0:i1])
 
-  if RKstep == 2: # third out of three-step third order RK scheme
-    rho[i0:i1, 0] = (rho[i0:i1, 0]/3. + 2 * rho[i0:i1, 2]/3.
-        - 2 * dt / dx * (Frho[i0+1:i1+1] - Frho[i0:i1])/3.)
-    rhov[i0:i1, 0] = (rhov[i0:i1, 0]/3. + 2 * rhov[i0:i1, 2]/3.
-        - 2 * dt / dx * (Frhov[i0+1:i1+1] - Frhov[i0:i1])/3.)
-    E[i0:i1, 0] = (E[i0:i1, 0]/3. + 2 * E[i0:i1, 2]/3. 
-        - 2 * dt / dx * (FE[i0+1:i1+1] - FE[i0:i1])/3.)
-    
 #-------------------------------------------------------------------------------
   
 # INITIALIZATION: Set up a shock tube, using the primitive variables rho, v, p
@@ -391,7 +413,7 @@ t1 = 0.012 # overrule the value provided at the start of the source code
 prim2cons(0)
 
 #-------------------------------------------------------------------------------
-#itmax = 1
+#itmax = 5
 
 # run solver
 while not finished:
@@ -402,32 +424,26 @@ while not finished:
   #set_dt()
   #set_flux(0)
   #update_grid(-1)
-  
-  # first round of third-order RK scheme
+
+  # first round of second-order RK scheme
   set_ghosts(0)
   cons2prim(0)
   set_dt()
   set_flux(0)
   update_grid(0)
-  
-  # second round of third-order RK scheme
+
+  # second round of second-order RK scheme
   set_ghosts(1)
   cons2prim(1)
   set_flux(1)
   update_grid(1)
-  
-  # third round of third-order RK scheme
-  set_ghosts(2)
-  cons2prim(2)
-  set_flux(2)
-  update_grid(2)
   
   t = t + dt
   iterations = iterations + 1
   
   # cap the total iterations
   if iterations == itmax:
-    print("Maximum number of iterations (%d) reached" % iterations)
+    print("# Maximum number of iterations (%d) reached" % iterations)
     finished = True
 
 # make sure the primitive variables are also up to date  
@@ -445,15 +461,25 @@ fontprop.set_size(13)
 
 for i in range(RES):
 #  print("%e, %e" % (x[no_ghosts+i] + 0.5*dx, rho[no_ghosts+i,0]))
-  print("%e, %e" % (x[no_ghosts+i] + 0.5*dx, p[no_ghosts+i]/rho[no_ghosts+i,0]/(gamma-1.)))
-exit()
-
-plt.plot(x[grid_entries] + 0.5*dx, rho[grid_entries, 0], 
-  color= 'blue', marker = '.')
+#  print("%e, %e" % (x[no_ghosts+i] + 0.5*dx, p[no_ghosts+i]/rho[no_ghosts+i,0]/(gamma-1.)))
+  print("%d, %e, %e, %e, %e, %e, %e" % 
+  (i, x[no_ghosts+i] + 0.5*dx, 
+  rho[no_ghosts+i,0], 
+  rhov[no_ghosts+i,0], 
+  E[no_ghosts+i, 0],
+  v[no_ghosts+i], 
+  p[no_ghosts+i]))
+  
+#exit()
+2, 2.500000e-03, 1.000000e+00, 7.500000e-01, 2.781250e+00, 7.500000e-01, 1.000000e+00
+#plt.plot(x[grid_entries] + 0.5*dx, rho[grid_entries, 0], 
+#  color= 'blue', marker = '.')
 #plt.plot(x[grid_entries] + 0.5*dx, rhov[grid_entries, 0], color= 'red')
 #plt.plot(x[grid_entries] + 0.5*dx, E[grid_entries, 0], color= 'green')
 #plt.plot(x[grid_entries] + 0.5*dx, p[grid_entries], color= 'brown')
 #plt.plot(x[grid_entries] + 0.5*dx, v[grid_entries], color= 'black')
+
+plt.plot(x[grid_entries] + 0.5*dx, p[grid_entries] / rho[grid_entries, 0] / (gamma-1.), color= 'brown')
 
 
 plt.draw()
