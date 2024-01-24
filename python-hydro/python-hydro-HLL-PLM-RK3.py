@@ -2,13 +2,17 @@
 #
 # An implementation of a finite volume 1D hydro solver in python, done as simple
 # as possible to demonstrate the CFD concepts rather than python. 
+#
+# This version uses the HLL method, the Piecewise Linear Method and a 
+# third order Runge-Kutta time step.
 
 import numpy as np
 
-# resolution settings
+# resolution and other program settings
 RES = 200 # set the numerical resolution, excluding ghost cells
 no_ghosts = 2 # number of ghost cells, should be 2 for Piecewise Linear Method
-itmax = 100000 # maximum number or iterations, use negative number to ignore
+itmax = 100000 # maximum number of iterations, use negative number to ignore
+plot_output = False # set to true to draw a plot
 
 # physics settings
 gamma = 1.4 # adiabatic exponent, assuming adiabatic exponent EOS
@@ -16,7 +20,7 @@ x0 = 0. # x-coordinate left boundary grid (ghost cells lie beyond this)
 x1 = 1. # x-coordinate right boundary grid (ghost cells lie beyond this)
 t1 = 0.2 # maximum running time
 
-# computed grid global variables
+# Initialize computed grid global variables
 t = 0. # current time
 dt = 0. # current time step size
 iterations = 0 # total number of iterations
@@ -135,7 +139,8 @@ def set_LR_states(RK = 0):
   # Set the left and right states based on the Piecewise Linear Method and 
   # minmod slope modifier. We'll apply PLM to rho, p and v. The quantities
   # E and rhov are then reproduced from these, rather than by interpolation
-  # between their values at adjacent cells
+  # between their values at adjacent cells. This ensures that the fluid state
+  # variables are consistent
   
   # density states
   sa[0] = 0
@@ -190,21 +195,6 @@ def set_LR_states(RK = 0):
   rhovR[i0:i1+1] = rhoR[i0:i1+1] * vR[i0:i1+1]
   EL[i0:i1+1] = 0.5 * vL[i0:i1+1] * rhovL[i0:i1+1] + pL[i0:i1+1] / (gamma - 1.)
   ER[i0:i1+1] = 0.5 * vR[i0:i1+1] * rhovR[i0:i1+1] + pR[i0:i1+1] / (gamma - 1.)
-
-  """
-  print ("-------")
-  print ("RK = ", RK)
-  print(entries) 
-  print ("sa:", sa)
-  print ("sb:", sb)
-  print ("s:", s)
-  print ("rho:", rho[:,RK])
-  print ("left states:")
-  print ("EL:", EL)
-  print ("pL:", pL)
-  print ("rhovL:", rhovL)
-  print ("rhoL:", rhoL)
-  """
 
 def set_flux(RK = 0):
   # set states immediately to left and right of cell boundary.
@@ -275,13 +265,6 @@ def set_flux(RK = 0):
   FE[entries] = (SR[entries] * FEL[entries] - SL[entries] * FER[entries]
     + SR[entries] * SL[entries] * (ER[entries] - EL[entries])) / (
     SR[entries] - SL[entries])
-    
-  #print ("Frho:", Frho)
-  #print ("FrhoL:", FrhoL)
-  #print ("FrhoR:", FrhoR)
-  #print ("SL:", SL)
-  #print ("SR:", SR)
-  #print ("------")
 
 def set_dt():
   # set the allowed timestep according to CFL condition
@@ -296,7 +279,7 @@ def set_dt():
 
 def update_grid(RKstep = -1):
   
-  if RKstep == -1: # revert to Forward Euler
+  if RKstep == -1: # revert to Forward Euler, included for comparison
     rho[i0:i1, 0] = rho[i0:i1, 0] - dt / dx * (Frho[i0+1:i1+1] - Frho[i0:i1])
     rhov[i0:i1, 0] = rhov[i0:i1, 0] - dt/dx * (Frhov[i0+1:i1+1] - Frhov[i0:i1])
     E[i0:i1, 0] = E[i0:i1, 0] - dt / dx * (FE[i0+1:i1+1] - FE[i0:i1])
@@ -311,7 +294,7 @@ def update_grid(RKstep = -1):
   #
   # y_{n+1} = y_n + h SUM_{i=0}^1 b_i k_i
   #
-  # k_i = f( t_n + c_i h, y_n + h SUM_{j=0}^{i-1} a_ij k_j
+  # k_i = f( t_n + c_i h, y_n + h SUM_{j=0}^{i-1} a_ij k_j )
   # 
   # in our case, f not a direct function of t, so c_i will not be needed
   # I start counting all indices at zero, not one, to connect to programming
@@ -392,6 +375,8 @@ prim2cons(0)
 # run solver
 while not finished:
 
+  #print("iteration %d, t = %e:" % (iterations, t))
+
   # Forward Euler scheme
   #set_ghosts(0)
   #cons2prim(0)
@@ -430,29 +415,30 @@ while not finished:
 cons2prim(0)
 
 ################################################################################
-# everything plotting related
-import matplotlib.pyplot as plt
-import matplotlib.font_manager as fnt
-
-plt.rcParams['font.size'] = 15
-plt.rcParams['font.family'] = 'serif'
-fontprop = fnt.FontProperties()
-fontprop.set_size(13)
+# Dump the output on the screen
 
 for i in range(RES):
-#  print("%e, %e" % (x[no_ghosts+i] + 0.5*dx, rho[no_ghosts+i,0]))
-  print("%e, %e" % (x[no_ghosts+i] + 0.5*dx, p[no_ghosts+i]/rho[no_ghosts+i,0]/(gamma-1.)))
-exit()
+  print("%e, %e" % (x[no_ghosts+i] + 0.5*dx, rho[no_ghosts+i,0]))
 
-plt.plot(x[grid_entries] + 0.5*dx, rho[grid_entries, 0], 
-  color= 'blue', marker = '.')
-#plt.plot(x[grid_entries] + 0.5*dx, rhov[grid_entries, 0], color= 'red')
-#plt.plot(x[grid_entries] + 0.5*dx, E[grid_entries, 0], color= 'green')
-#plt.plot(x[grid_entries] + 0.5*dx, p[grid_entries], color= 'brown')
-#plt.plot(x[grid_entries] + 0.5*dx, v[grid_entries], color= 'black')
+################################################################################
+# everything plotting related
 
+if plot_output == True:
+  import matplotlib.pyplot as plt
+  import matplotlib.font_manager as fnt
 
-plt.draw()
-plt.show()
+  plt.rcParams['font.size'] = 15
+  plt.rcParams['font.family'] = 'serif'
+  fontprop = fnt.FontProperties()
+  fontprop.set_size(13)
+
+  plt.plot(x[grid_entries] + 0.5*dx, rho[grid_entries], color= 'blue', marker = '.')
+  #plt.plot(x[grid_entries] + 0.5*dx, rhov[grid_entries], color= 'red')
+  #plt.plot(x[grid_entries] + 0.5*dx, E[grid_entries], color= 'green')
+  #plt.plot(x[grid_entries] + 0.5*dx, p[grid_entries], color= 'brown')
+  #plt.plot(x[grid_entries] + 0.5*dx, v[grid_entries], color= 'black')
+
+  plt.draw()
+  plt.show()
 
 

@@ -3,14 +3,14 @@
 # An implementation of a finite volume 1D hydro solver in python, done as simple
 # as possible to demonstrate the CFD concepts rather than python. 
 #
-# This version uses the HLL method, the Piecewise Constant Method and a 
-# second order Runge-Kutta time step.
+# This version uses the HLL method, the Piecewise Linear Method and a 
+# Forward Euler time step.
 
 import numpy as np
 
 # resolution and other program settings
 RES = 200 # set the numerical resolution, excluding ghost cells
-no_ghosts = 1 # number of ghost cells
+no_ghosts = 2 # number of ghost cells, should be 2 for Piecewise Linear Method
 itmax = 100000 # maximum number of iterations, use negative number to ignore
 plot_output = False # set to true to draw a plot
 
@@ -47,9 +47,9 @@ flux_entries[no_ghosts+RES+1:no_ghosts*2+RES] = False
 #-------------------------------------------------------------------------------
 
 # initialize the arrays
-rho = np.empty((RES + 2 * no_ghosts, 2)) # conserved variable density
-rhov = np.empty((RES + 2 * no_ghosts, 2)) # conserved variable momentum density
-E = np.empty((RES + 2 * no_ghosts, 2)) # conserved variable energy density
+rho = np.empty((RES + 2 * no_ghosts)) # conserved variable density
+rhov = np.empty((RES + 2 * no_ghosts)) # conserved variable momentum density
+E = np.empty((RES + 2 * no_ghosts)) # conserved variable energy density
 
 p = np.empty(RES + 2 * no_ghosts)   # primitive variable pressure
 v = np.empty(RES + 2 * no_ghosts)   # primitive variable velocity
@@ -67,9 +67,7 @@ for i in range(ig1):
 # concepts, not an optimized code. Therefore, we just declare extra arrays for
 # various auxiliary quantities. quantities with label 'L' are defined just
 # to the left of the left cell boundary of cell i. Quantities with label 'R' are
-# defined just to the right of the left cell boundary of cell i. In our simple
-# case of piecewise flat cell content, we don't really need a separate L and R
-# quantity, but this sets the stage for higher order spatial reconstruction
+# defined just to the right of the left cell boundary of cell i.
 dt_local = np.empty(RES + 2 * no_ghosts) # local CFL condition
 
 rhoL = np.empty(RES + 2 * no_ghosts) # conserved variable density
@@ -102,54 +100,106 @@ pstar = np.empty(RES + 2 * no_ghosts) # p-star from HLL method
 SL = np.empty(RES + 2 * no_ghosts) # left wave speed left cell boundary
 SR = np.empty(RES + 2 * no_ghosts) # right wave speed left cell boundary
 
+sa = np.empty(RES + 2 * no_ghosts) # 'raw' slopes, no minmod applied
+sb = np.empty(RES + 2 * no_ghosts) # 'raw' slopes, no minmod applied
+s = np.empty(RES + 2 * no_ghosts) # slopes
+
 #-------------------------------------------------------------------------------
  
-def prim2cons(RK = 0):
+def prim2cons():
   # compute conserved quantities rho, S, E based on primitive rho, p, v
   # (rho is both, so does not need separate computing). 
   # Only acts on non-ghost cells.
-  rhov[i0:i1, RK] = rho[i0:i1, RK] * v[i0:i1]
-  E[i0:i1, RK] = 0.5 * v[i0:i1] * rhov[i0:i1, RK] + p[i0:i1] / (gamma - 1.)
+  rhov[i0:i1] = rho[i0:i1] * v[i0:i1]
+  E[i0:i1] = 0.5 * v[i0:i1] * rhov[i0:i1] + p[i0:i1] / (gamma - 1.)
   
-def cons2prim(RK = 0):
+def cons2prim():
   # compute primitive quantities rho, p, v based on conserved rho, S, E
   # (rho is both, so does not need separate computing).
   # Acts on ghost cells as well
-  v[ig0:ig1] = rhov[ig0:ig1, RK] / rho[ig0:ig1, RK]
+  v[ig0:ig1] = rhov[ig0:ig1] / rho[ig0:ig1]
   p[ig0:ig1] = ((gamma - 1.) * 
-    (E[ig0:ig1, RK] - .5 * rhov[ig0:ig1, RK] * v[ig0:ig1])) 
+    (E[ig0:ig1] - .5 * rhov[ig0:ig1] * v[ig0:ig1])) 
 
-def set_ghosts(RK = 0):
+def set_ghosts():
   # set the conserved quantity values of the ghost cells
   for i in range(no_ghosts):
  
     # inflow/outflow BC left side
-    rho[i, RK] = rho[no_ghosts, RK]
-    rhov[i, RK] = rhov[no_ghosts, RK]
-    E[i, RK] = E[no_ghosts, RK]
+    rho[i] = rho[no_ghosts]
+    rhov[i] = rhov[no_ghosts]
+    E[i] = E[no_ghosts]
     
     # inflow/outflow BC right side
-    rho[i1 + i, RK] = rho[i1 - 1, RK]
-    rhov[i1 + i, RK] = rhov[i1 - 1, RK]
-    E[i1 + i, RK] = E[i1 - 1, RK]
+    rho[i1 + i] = rho[i1 - 1]
+    rhov[i1 + i] = rhov[i1 - 1]
+    E[i1 + i] = E[i1 - 1]
 
+def set_LR_states():
+  # Set the left and right states based on the Piecewise Linear Method and 
+  # minmod slope modifier. We'll apply PLM to rho, p and v. The quantities
+  # E and rhov are then reproduced from these, rather than by interpolation
+  # between their values at adjacent cells. This ensures that the fluid state
+  # variables are consistent
+  
+  # density states
+  sa[0] = 0
+  sa[i0-1:i1+2] = (rho[i0-1:i1+2] - rho[i0-2:i1+1]) / dx
+  sb[i0-1:i1+1] = sa[i0:i1+2]
+  
+  s[:] = 0 # by default
+  
+  entries = (sa < 0) & (sb < 0)
+  s[entries] = np.maximum(sa[entries], sb[entries])
+  
+  entries = (sa > 0) & (sb > 0)
+  s[entries] = np.minimum(sa[entries], sb[entries])
+  
+  rhoL[i0:i1+1] = rho[i0-1:i1] + 0.5 * dx * s[i0-1:i1]
+  rhoR[i0:i1+1] = rho[i0:i1+1] - 0.5 * dx * s[i0:i1+1]
+  
+  # velocity states
+  sa[0] = 0
+  sa[i0-1:i1+2] = (v[i0-1:i1+2] - v[i0-2:i1+1]) / dx
+  sb[i0-1:i1+1] = sa[i0:i1+2]
+  
+  s[:] = 0 # by default
+  
+  entries = (sa < 0) & (sb < 0)
+  s[entries] = np.maximum(sa[entries], sb[entries])
+  
+  entries = (sa > 0) & (sb > 0)
+  s[entries] = np.minimum(sa[entries], sb[entries])
+  
+  vL[i0:i1+1] = v[i0-1:i1] + 0.5 * dx * s[i0-1:i1]
+  vR[i0:i1+1] = v[i0:i1+1] - 0.5 * dx * s[i0:i1+1]
+  
+  # pressure states
+  sa[0] = 0
+  sa[i0-1:i1+2] = (p[i0-1:i1+2] - p[i0-2:i1+1]) / dx
+  sb[i0-1:i1+1] = sa[i0:i1+2]
+  
+  s[:] = 0 # by default
+  
+  entries = (sa < 0) & (sb < 0)
+  s[entries] = np.maximum(sa[entries], sb[entries])
+  
+  entries = (sa > 0) & (sb > 0)
+  s[entries] = np.minimum(sa[entries], sb[entries])
+  
+  pL[i0:i1+1] = p[i0-1:i1] + 0.5 * dx * s[i0-1:i1]
+  pR[i0:i1+1] = p[i0:i1+1] - 0.5 * dx * s[i0:i1+1]
+  
+  # derive the other states using EOS (this includes a local prim2cons version)
+  rhovL[i0:i1+1] = rhoL[i0:i1+1] * vL[i0:i1+1]
+  rhovR[i0:i1+1] = rhoR[i0:i1+1] * vR[i0:i1+1]
+  EL[i0:i1+1] = 0.5 * vL[i0:i1+1] * rhovL[i0:i1+1] + pL[i0:i1+1] / (gamma - 1.)
+  ER[i0:i1+1] = 0.5 * vR[i0:i1+1] * rhovR[i0:i1+1] + pR[i0:i1+1] / (gamma - 1.)
 
-def set_flux(RK = 0):
+def set_flux():
   # set states immediately to left and right of cell boundary.
-  pL[i0:i1+1] = p[i0-1:i1]
-  vL[i0:i1+1] = v[i0-1:i1]
-
-  rhoL[i0:i1+1] = rho[i0-1:i1, RK]
-  rhovL[i0:i1+1] = rhov[i0-1:i1, RK]
-  EL[i0:i1+1] = E[i0-1:i1, RK]
-
-  pR[i0:i1+1] = p[i0:i1+1]
-  vR[i0:i1+1] = v[i0:i1+1]
-
-  rhoR[i0:i1+1] = rho[i0:i1+1, RK]
-  rhovR[i0:i1+1] = rhov[i0:i1+1, RK]
-  ER[i0:i1+1] = E[i0:i1+1, RK]
-
+  set_LR_states()
+  
   # fluxes to left and right
   FrhoL[i0:i1+1] = rhovL[i0:i1+1]
   FrhovL[i0:i1+1] = rhovL[i0:i1+1] * vL[i0:i1+1] + pL[i0:i1+1]
@@ -219,7 +269,7 @@ def set_flux(RK = 0):
 def set_dt():
   # set the allowed timestep according to CFL condition
   dt_local[i0:i1] = dx / (np.absolute(v[i0:i1]) + 
-    np.sqrt(gamma * p[i0:i1] / rho[i0:i1, 0]))
+    np.sqrt(gamma * p[i0:i1] / rho[i0:i1]))
   global dt
   global finished
   dt = 0.3 * np.min(dt_local[i0:i1]) # a margin of 0.3
@@ -229,56 +279,16 @@ def set_dt():
 
 def update_grid(RKstep = -1):
   
-  if RKstep == -1: # revert to Forward Euler, included for comparison
-    rho[i0:i1, 0] = rho[i0:i1, 0] - dt / dx * (Frho[i0+1:i1+1] - Frho[i0:i1])
-    rhov[i0:i1, 0] = rhov[i0:i1, 0] - dt/dx * (Frhov[i0+1:i1+1] - Frhov[i0:i1])
-    E[i0:i1, 0] = E[i0:i1, 0] - dt / dx * (FE[i0+1:i1+1] - FE[i0:i1])
-  
-  # Second-order RK scheme for function dy/dt = f(t, y):
-  # 
-  # tableau: 0   | 0    0         c_0 | a_00 a_01
-  #          1/2 | 1/2  0         c_1 | a_10 a_11 
-  #          ----+---------      -----+-----------
-  #              | 0    1             | b_0  b_1
-  #
-  # y_{n+1} = y_n + h SUM_{i=0}^1 b_i k_i
-  #
-  # k_i = f( t_n + c_i h, y_n + h SUM_{j=0}^{i-1} a_ij k_j )
-  # 
-  # in our case, f not a direct function of t, so c_0, c_1 will not be needed
-  # I start counting all indices at zero, not one, to connect to programming
-  # 
-  # k_0 = f( t_n, y_n ) -> k_0 = f( y_n) 
-  # k_1 = f( t_n + c_1 h, y_n + h a_10 k_0 ) 
-  #     = f( t_n + h / 2, y_n + h (1/2) k_0 ) -> f( y_n + h (1/2) k_0 )
-  #
-  # y_{n+1} = y_n + h b_0 k_0 + h b_1 k_1 = y_n + h k_1
-  #
-  # In terms of intermediate states Q: 
-  # Q_0 = y_n
-  # k_0 = f( Q_0 )                RK = 0 in set_flux routine
-  # Q_1 = Q_0 + (h/2) f( Q_0 )    RKstep == 0 below
-  # k_1 = f( Q_1 )                RK = 1 in set flux routine
-  # y_{n+1} = Q_0 + h f ( Q_1 )   RKstep == 1 below
-  
-  if RKstep == 0: # first out of two-step second order RK scheme
-    rho[i0:i1, 1] = (rho[i0:i1, 0] - 
-      0.5 * dt / dx * (Frho[i0+1:i1+1] - Frho[i0:i1]))
-    rhov[i0:i1, 1] = (rhov[i0:i1, 0] - 
-      0.5 * dt / dx * (Frhov[i0+1:i1+1] - Frhov[i0:i1]))
-    E[i0:i1, 1] = E[i0:i1, 0] - 0.5 * dt / dx * (FE[i0+1:i1+1] - FE[i0:i1])
-    
-  if RKstep == 1: # second out of two-step second order RK scheme
-    rho[i0:i1, 0] = rho[i0:i1, 0] - dt / dx * (Frho[i0+1:i1+1] - Frho[i0:i1])
-    rhov[i0:i1, 0] = rhov[i0:i1, 0] - dt/dx * (Frhov[i0+1:i1+1] - Frhov[i0:i1])
-    E[i0:i1, 0] = E[i0:i1, 0] - dt / dx * (FE[i0+1:i1+1] - FE[i0:i1])
+  rho[i0:i1] = rho[i0:i1] - dt / dx * (Frho[i0+1:i1+1] - Frho[i0:i1])
+  rhov[i0:i1] = rhov[i0:i1] - dt/dx * (Frhov[i0+1:i1+1] - Frhov[i0:i1])
+  E[i0:i1] = E[i0:i1] - dt / dx * (FE[i0+1:i1+1] - FE[i0:i1])
     
 #-------------------------------------------------------------------------------
   
 # INITIALIZATION: Set up a shock tube, using the primitive variables rho, v, p
 
 xbound = 0.3
-rho[x < xbound, 0] = 1.
+rho[x < xbound] = 1.
 v[x < xbound] = 0.75
 p[x < xbound] = 1.
 rho[x >= xbound] = 0.125 
@@ -288,7 +298,7 @@ p[x >= xbound] = 0.1
 
 """
 xbound = 0.8
-rho[x < xbound, 0] = 1.
+rho[x < xbound] = 1.
 v[x < xbound] = -19.59745
 p[x < xbound] = 1000.
 rho[x >= xbound] = 1. 
@@ -297,35 +307,21 @@ p[x >= xbound] = 0.01
 t1 = 0.012 # overrule the value provided at the start of the source code
 """
 
-prim2cons(0)
+prim2cons()
 
 #-------------------------------------------------------------------------------
+#itmax = 1
 
 # run solver
 while not finished:
 
   #print("iteration %d, t = %e:" % (iterations, t))
-
-  # Forward Euler scheme
-  #set_ghosts(0)
-  #cons2prim(0)
-  #set_dt()
-  #set_flux(0)
-  #update_grid(-1)
-  
-  # first round of second-order RK scheme
-  set_ghosts(0)
-  cons2prim(0)
+  set_ghosts()
+  cons2prim()
   set_dt()
-  set_flux(0)
-  update_grid(0)
-
-  # second round of second-order RK scheme
-  set_ghosts(1)
-  cons2prim(1)
-  set_flux(1)
-  update_grid(1)
-  
+  set_flux()
+  update_grid()
+    
   t = t + dt
   iterations = iterations + 1
   
@@ -333,15 +329,15 @@ while not finished:
   if iterations == itmax:
     print("Maximum number of iterations (%d) reached" % iterations)
     finished = True
-  
+
 # make sure the primitive variables are also up to date  
-cons2prim(0)
+cons2prim()
 
 ################################################################################
 # Dump the output on the screen
 
 for i in range(RES):
-  print("%e, %e" % (x[no_ghosts+i] + 0.5*dx, rho[no_ghosts+i,0]))
+  print("%e, %e" % (x[no_ghosts+i] + 0.5*dx, rho[no_ghosts+i]))
 
 ################################################################################
 # everything plotting related
@@ -363,4 +359,5 @@ if plot_output == True:
 
   plt.draw()
   plt.show()
+
 
