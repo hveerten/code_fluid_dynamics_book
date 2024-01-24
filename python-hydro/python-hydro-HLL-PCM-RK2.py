@@ -2,13 +2,17 @@
 #
 # An implementation of a finite volume 1D hydro solver in python, done as simple
 # as possible to demonstrate the CFD concepts rather than python. 
+#
+# This version uses the HLL method, the Piecewise Constant Method and a 
+# second order Runge-Kutta time step.
 
 import numpy as np
 
-# resolution settings
+# resolution and other program settings
 RES = 200 # set the numerical resolution, excluding ghost cells
-no_ghosts = 2 # number of ghost cells, should be 2 for Piecewise Linear Method
-itmax = 100000 # maximum number or iterations, use negative number to ignore
+no_ghosts = 1 # number of ghost cells
+itmax = 100000 # maximum number of iterations, use negative number to ignore
+plot_output = False # set to true to draw a plot
 
 # physics settings
 gamma = 1.4 # adiabatic exponent, assuming adiabatic exponent EOS
@@ -16,7 +20,7 @@ x0 = 0. # x-coordinate left boundary grid (ghost cells lie beyond this)
 x1 = 1. # x-coordinate right boundary grid (ghost cells lie beyond this)
 t1 = 0.2 # maximum running time
 
-# computed grid global variables
+# Initialize computed grid global variables
 t = 0. # current time
 dt = 0. # current time step size
 iterations = 0 # total number of iterations
@@ -43,9 +47,9 @@ flux_entries[no_ghosts+RES+1:no_ghosts*2+RES] = False
 #-------------------------------------------------------------------------------
 
 # initialize the arrays
-rho = np.empty((RES + 2 * no_ghosts, 3)) # conserved variable density
-rhov = np.empty((RES + 2 * no_ghosts, 3)) # conserved variable momentum density
-E = np.empty((RES + 2 * no_ghosts, 3)) # conserved variable energy density
+rho = np.empty((RES + 2 * no_ghosts, 2)) # conserved variable density
+rhov = np.empty((RES + 2 * no_ghosts, 2)) # conserved variable momentum density
+E = np.empty((RES + 2 * no_ghosts, 2)) # conserved variable energy density
 
 p = np.empty(RES + 2 * no_ghosts)   # primitive variable pressure
 v = np.empty(RES + 2 * no_ghosts)   # primitive variable velocity
@@ -63,7 +67,9 @@ for i in range(ig1):
 # concepts, not an optimized code. Therefore, we just declare extra arrays for
 # various auxiliary quantities. quantities with label 'L' are defined just
 # to the left of the left cell boundary of cell i. Quantities with label 'R' are
-# defined just to the right of the left cell boundary of cell i.
+# defined just to the right of the left cell boundary of cell i. In our simple
+# case of piecewise flat cell content, we don't really need a separate L and R
+# quantity, but this sets the stage for higher order spatial reconstruction
 dt_local = np.empty(RES + 2 * no_ghosts) # local CFL condition
 
 rhoL = np.empty(RES + 2 * no_ghosts) # conserved variable density
@@ -92,17 +98,9 @@ FrhoR = np.empty(RES + 2 * no_ghosts) # density flux left cell boundary
 FrhovR = np.empty(RES + 2 * no_ghosts) # momentum flux left cell boundary
 FER = np.empty(RES + 2 * no_ghosts) # energy flux left cell boundary
 
-FrhoHLL = np.empty(RES + 2 * no_ghosts) # density flux left cell boundary
-FrhovHLL = np.empty(RES + 2 * no_ghosts) # momentum flux left cell boundary
-FEHLL = np.empty(RES + 2 * no_ghosts) # energy flux left cell boundary
-
 pstar = np.empty(RES + 2 * no_ghosts) # p-star from HLL method
 SL = np.empty(RES + 2 * no_ghosts) # left wave speed left cell boundary
 SR = np.empty(RES + 2 * no_ghosts) # right wave speed left cell boundary
-
-sa = np.empty(RES + 2 * no_ghosts) # 'raw' slopes, no minmod applied
-sb = np.empty(RES + 2 * no_ghosts) # 'raw' slopes, no minmod applied
-s = np.empty(RES + 2 * no_ghosts) # slopes
 
 #-------------------------------------------------------------------------------
  
@@ -135,85 +133,23 @@ def set_ghosts(RK = 0):
     rhov[i1 + i, RK] = rhov[i1 - 1, RK]
     E[i1 + i, RK] = E[i1 - 1, RK]
 
-def set_LR_states(RK = 0):
-  # Set the left and right states based on the Piecewise Linear Method and 
-  # minmod slope modifier. We'll apply PLM to rho, p and v. The quantities
-  # E and rhov are then reproduced from these, rather than by interpolation
-  # between their values at adjacent cells
-  
-  # density states
-  sa[0] = 0
-  sa[i0-1:i1+2] = (rho[i0-1:i1+2, RK] - rho[i0-2:i1+1, RK]) / dx
-  sb[i0-1:i1+1] = sa[i0:i1+2]
-  
-  s[:] = 0 # by default
-  
-  entries = (sa < 0) & (sb < 0)
-  s[entries] = np.maximum(sa[entries], sb[entries])
-  
-  entries = (sa > 0) & (sb > 0)
-  s[entries] = np.minimum(sa[entries], sb[entries])
-  
-  rhoL[i0:i1+1] = rho[i0-1:i1, RK] + 0.5 * dx * s[i0-1:i1]
-  rhoR[i0:i1+1] = rho[i0:i1+1, RK] - 0.5 * dx * s[i0:i1+1]
-  
-  # velocity states
-  sa[0] = 0
-  sa[i0-1:i1+2] = (v[i0-1:i1+2] - v[i0-2:i1+1]) / dx
-  sb[i0-1:i1+1] = sa[i0:i1+2]
-  
-  s[:] = 0 # by default
-  
-  entries = (sa < 0) & (sb < 0)
-  s[entries] = np.maximum(sa[entries], sb[entries])
-  
-  entries = (sa > 0) & (sb > 0)
-  s[entries] = np.minimum(sa[entries], sb[entries])
-  
-  vL[i0:i1+1] = v[i0-1:i1] + 0.5 * dx * s[i0-1:i1]
-  vR[i0:i1+1] = v[i0:i1+1] - 0.5 * dx * s[i0:i1+1]
-  
-  # pressure states
-  sa[0] = 0
-  sa[i0-1:i1+2] = (p[i0-1:i1+2] - p[i0-2:i1+1]) / dx
-  sb[i0-1:i1+1] = sa[i0:i1+2]
-  
-  s[:] = 0 # by default
-  
-  entries = (sa < 0) & (sb < 0)
-  s[entries] = np.maximum(sa[entries], sb[entries])
-  
-  entries = (sa > 0) & (sb > 0)
-  s[entries] = np.minimum(sa[entries], sb[entries])
-  
-  pL[i0:i1+1] = p[i0-1:i1] + 0.5 * dx * s[i0-1:i1]
-  pR[i0:i1+1] = p[i0:i1+1] - 0.5 * dx * s[i0:i1+1]
-  
-  # derive the other states using EOS (this includes a local prim2cons version)
-  rhovL[i0:i1+1] = rhoL[i0:i1+1] * vL[i0:i1+1]
-  rhovR[i0:i1+1] = rhoR[i0:i1+1] * vR[i0:i1+1]
-  EL[i0:i1+1] = 0.5 * vL[i0:i1+1] * rhovL[i0:i1+1] + pL[i0:i1+1] / (gamma - 1.)
-  ER[i0:i1+1] = 0.5 * vR[i0:i1+1] * rhovR[i0:i1+1] + pR[i0:i1+1] / (gamma - 1.)
-
-  """
-  print ("-------")
-  print ("RK = ", RK)
-  print(entries) 
-  print ("sa:", sa)
-  print ("sb:", sb)
-  print ("s:", s)
-  print ("rho:", rho[:,RK])
-  print ("left states:")
-  print ("EL:", EL)
-  print ("pL:", pL)
-  print ("rhovL:", rhovL)
-  print ("rhoL:", rhoL)
-  """
 
 def set_flux(RK = 0):
   # set states immediately to left and right of cell boundary.
-  set_LR_states(RK)
-  
+  pL[i0:i1+1] = p[i0-1:i1]
+  vL[i0:i1+1] = v[i0-1:i1]
+
+  rhoL[i0:i1+1] = rho[i0-1:i1, RK]
+  rhovL[i0:i1+1] = rhov[i0-1:i1, RK]
+  EL[i0:i1+1] = E[i0-1:i1, RK]
+
+  pR[i0:i1+1] = p[i0:i1+1]
+  vR[i0:i1+1] = v[i0:i1+1]
+
+  rhoR[i0:i1+1] = rho[i0:i1+1, RK]
+  rhovR[i0:i1+1] = rhov[i0:i1+1, RK]
+  ER[i0:i1+1] = E[i0:i1+1, RK]
+
   # fluxes to left and right
   FrhoL[i0:i1+1] = rhovL[i0:i1+1]
   FrhovL[i0:i1+1] = rhovL[i0:i1+1] * vL[i0:i1+1] + pL[i0:i1+1]
@@ -279,13 +215,6 @@ def set_flux(RK = 0):
   FE[entries] = (SR[entries] * FEL[entries] - SL[entries] * FER[entries]
     + SR[entries] * SL[entries] * (ER[entries] - EL[entries])) / (
     SR[entries] - SL[entries])
-    
-  #print ("Frho:", Frho)
-  #print ("FrhoL:", FrhoL)
-  #print ("FrhoR:", FrhoR)
-  #print ("SL:", SL)
-  #print ("SR:", SR)
-  #print ("------")
 
 def set_dt():
   # set the allowed timestep according to CFL condition
@@ -300,69 +229,49 @@ def set_dt():
 
 def update_grid(RKstep = -1):
   
-  if RKstep == -1: # revert to Forward Euler
+  if RKstep == -1: # revert to Forward Euler, included for comparison
     rho[i0:i1, 0] = rho[i0:i1, 0] - dt / dx * (Frho[i0+1:i1+1] - Frho[i0:i1])
     rhov[i0:i1, 0] = rhov[i0:i1, 0] - dt/dx * (Frhov[i0+1:i1+1] - Frhov[i0:i1])
     E[i0:i1, 0] = E[i0:i1, 0] - dt / dx * (FE[i0+1:i1+1] - FE[i0:i1])
   
-  # Third-order RK scheme for function dy/dt = f(t, y):
+  # Second-order RK scheme for function dy/dt = f(t, y):
   # 
-  # tableau: 0   | 0    0    0        c_0 | a_00 a_01 a_02
-  #          1   | 1    0    0        c_1 | a_10 a_11 a_12
-  #          1/2 | 1/4  1/4  0        c_2 | a_20 a_21 a_22
-  #          ----+---------------    -----+----------------
-  #              | 1/6  1/6  2/3          | b_0  b_1  b_2
+  # tableau: 0   | 0    0         c_0 | a_00 a_01
+  #          1/2 | 1/2  0         c_1 | a_10 a_11 
+  #          ----+---------      -----+-----------
+  #              | 0    1             | b_0  b_1
   #
   # y_{n+1} = y_n + h SUM_{i=0}^1 b_i k_i
   #
   # k_i = f( t_n + c_i h, y_n + h SUM_{j=0}^{i-1} a_ij k_j
   # 
-  # in our case, f not a direct function of t, so c_i will not be needed
+  # in our case, f not a direct function of t, so c_0, c_1 will not be needed
   # I start counting all indices at zero, not one, to connect to programming
   # 
-  # k_0 = f( y_n )
-  # k_1 = f( y_n + h a_10 k_0 ) = f( y_n + h k_0 )
-  # k_2 = f( y_n + h a_20 k_0 + h a_21 k_1 ) = f( y_n + (h/4) k_0 + (h/4) k_1 )
+  # k_0 = f( t_n, y_n ) -> k_0 = f( y_n) 
+  # k_1 = f( t_n + c_1 h, y_n + h a_10 k_0 ) 
+  #     = f( t_n + h / 2, y_n + h (1/2) k_0 ) -> f( y_n + h (1/2) k_0 )
   #
-  # Y_{n+1} = y_n + h b_0 k_0 + h b_1 k_1 + h b_2 k_2 
-  #         = y_n + (h/6) k_0 + (h/6) k_1 + (2h/3) k_2
+  # y_{n+1} = y_n + h b_0 k_0 + h b_1 k_1 = y_n + h k_1
   #
   # In terms of intermediate states Q: 
   # Q_0 = y_n
-  # k_0 = f( Q_0 )                             RK = 0 in set_flux routine
-  # Q_1 = Q_0 + h f( Q_0 )                     RKstep == 0 below
-  # k_1 = f( Q_1 )                             RK = 1 in set flux routine
-  # Q_2 = Q_0 + (h/4) k_0 + (h/4) k_1          
-  #     = (3/4) Q_0 + (1/4) Q_1 + (h/4) k_1    RKstep == 1 below
-  # k_2 = f( Q_2 )                             RK = 2 in set flux routine
-  # 
-  # y_{n+1} = Q_0 + (h/6) k_0 + (h/6) k_1 + (2h/3) k_2  
-  #         = (1/3) Q_0 + (2/3) Q_2 + (2h/3) f( Q_2 )      RKstep == 2 below
-  #
-  # We've used k_0 = (Q_1 - Q_0) / h and k_1 = (4 Q_2 - 3 Q_0 - Q_1) / h
-  # to eliminate these terms from the equations for Q_2 and y_{n+1}, since we
-  # are only storing the most recent set of fluxes at a given time
+  # k_0 = f( Q_0 )                RK = 0 in set_flux routine
+  # Q_1 = Q_0 + (h/2) f( Q_0 )    RKstep == 0 below
+  # k_1 = f( Q_1 )                RK = 1 in set flux routine
+  # y_{n+1} = Q_0 + h f ( Q_1 )   RKstep == 1 below
   
-  if RKstep == 0: # first out of three-step third-order RK scheme
-    rho[i0:i1, 1] = rho[i0:i1, 0] - dt / dx * (Frho[i0+1:i1+1] - Frho[i0:i1])
-    rhov[i0:i1, 1] = rhov[i0:i1, 0] - dt/dx * (Frhov[i0+1:i1+1] - Frhov[i0:i1])
-    E[i0:i1, 1] = E[i0:i1, 0] - dt / dx * (FE[i0+1:i1+1] - FE[i0:i1])
+  if RKstep == 0: # first out of two-step second order RK scheme
+    rho[i0:i1, 1] = (rho[i0:i1, 0] - 
+      0.5 * dt / dx * (Frho[i0+1:i1+1] - Frho[i0:i1]))
+    rhov[i0:i1, 1] = (rhov[i0:i1, 0] - 
+      0.5 * dt / dx * (Frhov[i0+1:i1+1] - Frhov[i0:i1]))
+    E[i0:i1, 1] = E[i0:i1, 0] - 0.5 * dt / dx * (FE[i0+1:i1+1] - FE[i0:i1])
     
-  if RKstep == 1: # second out of three-step third order RK scheme
-    rho[i0:i1, 2] = (0.75 * rho[i0:i1, 0] + 0.25 * rho[i0:i1, 1]
-        - 0.25 * dt / dx * (Frho[i0+1:i1+1] - Frho[i0:i1]))
-    rhov[i0:i1, 2] = (0.75 * rhov[i0:i1, 0] + 0.25 * rhov[i0:i1, 1]
-        - 0.25 * dt / dx * (Frhov[i0+1:i1+1] - Frhov[i0:i1]))
-    E[i0:i1, 2] = (0.75 * E[i0:i1, 0] + 0.25 * E[i0:i1, 1] 
-        - 0.25 * dt / dx * (FE[i0+1:i1+1] - FE[i0:i1]))
-
-  if RKstep == 2: # third out of three-step third order RK scheme
-    rho[i0:i1, 0] = (rho[i0:i1, 0]/3. + 2 * rho[i0:i1, 2]/3.
-        - 2 * dt / dx * (Frho[i0+1:i1+1] - Frho[i0:i1])/3.)
-    rhov[i0:i1, 0] = (rhov[i0:i1, 0]/3. + 2 * rhov[i0:i1, 2]/3.
-        - 2 * dt / dx * (Frhov[i0+1:i1+1] - Frhov[i0:i1])/3.)
-    E[i0:i1, 0] = (E[i0:i1, 0]/3. + 2 * E[i0:i1, 2]/3. 
-        - 2 * dt / dx * (FE[i0+1:i1+1] - FE[i0:i1])/3.)
+  if RKstep == 1: # second out of two-step second order RK scheme
+    rho[i0:i1, 0] = rho[i0:i1, 0] - dt / dx * (Frho[i0+1:i1+1] - Frho[i0:i1])
+    rhov[i0:i1, 0] = rhov[i0:i1, 0] - dt/dx * (Frhov[i0+1:i1+1] - Frhov[i0:i1])
+    E[i0:i1, 0] = E[i0:i1, 0] - dt / dx * (FE[i0+1:i1+1] - FE[i0:i1])
     
 #-------------------------------------------------------------------------------
   
@@ -391,7 +300,6 @@ t1 = 0.012 # overrule the value provided at the start of the source code
 prim2cons(0)
 
 #-------------------------------------------------------------------------------
-#itmax = 1
 
 # run solver
 while not finished:
@@ -403,24 +311,18 @@ while not finished:
   #set_flux(0)
   #update_grid(-1)
   
-  # first round of third-order RK scheme
+  # first round of second-order RK scheme
   set_ghosts(0)
   cons2prim(0)
   set_dt()
   set_flux(0)
   update_grid(0)
-  
-  # second round of third-order RK scheme
+
+  # second round of second-order RK scheme
   set_ghosts(1)
   cons2prim(1)
   set_flux(1)
   update_grid(1)
-  
-  # third round of third-order RK scheme
-  set_ghosts(2)
-  cons2prim(2)
-  set_flux(2)
-  update_grid(2)
   
   t = t + dt
   iterations = iterations + 1
@@ -429,34 +331,34 @@ while not finished:
   if iterations == itmax:
     print("Maximum number of iterations (%d) reached" % iterations)
     finished = True
-
+  
 # make sure the primitive variables are also up to date  
 cons2prim(0)
 
 ################################################################################
-# everything plotting related
-import matplotlib.pyplot as plt
-import matplotlib.font_manager as fnt
-
-plt.rcParams['font.size'] = 15
-plt.rcParams['font.family'] = 'serif'
-fontprop = fnt.FontProperties()
-fontprop.set_size(13)
+# Dump the output on the screen
 
 for i in range(RES):
-#  print("%e, %e" % (x[no_ghosts+i] + 0.5*dx, rho[no_ghosts+i,0]))
-  print("%e, %e" % (x[no_ghosts+i] + 0.5*dx, p[no_ghosts+i]/rho[no_ghosts+i,0]/(gamma-1.)))
-exit()
+  print("%e, %e" % (x[no_ghosts+i] + 0.5*dx, rho[no_ghosts+i,0]))
 
-plt.plot(x[grid_entries] + 0.5*dx, rho[grid_entries, 0], 
-  color= 'blue', marker = '.')
-#plt.plot(x[grid_entries] + 0.5*dx, rhov[grid_entries, 0], color= 'red')
-#plt.plot(x[grid_entries] + 0.5*dx, E[grid_entries, 0], color= 'green')
-#plt.plot(x[grid_entries] + 0.5*dx, p[grid_entries], color= 'brown')
-#plt.plot(x[grid_entries] + 0.5*dx, v[grid_entries], color= 'black')
+################################################################################
+# everything plotting related
 
+if plot_output == True:
+  import matplotlib.pyplot as plt
+  import matplotlib.font_manager as fnt
 
-plt.draw()
-plt.show()
+  plt.rcParams['font.size'] = 15
+  plt.rcParams['font.family'] = 'serif'
+  fontprop = fnt.FontProperties()
+  fontprop.set_size(13)
 
+  plt.plot(x[grid_entries] + 0.5*dx, rho[grid_entries], color= 'blue', marker = '.')
+  #plt.plot(x[grid_entries] + 0.5*dx, rhov[grid_entries], color= 'red')
+  #plt.plot(x[grid_entries] + 0.5*dx, E[grid_entries], color= 'green')
+  #plt.plot(x[grid_entries] + 0.5*dx, p[grid_entries], color= 'brown')
+  #plt.plot(x[grid_entries] + 0.5*dx, v[grid_entries], color= 'black')
+
+  plt.draw()
+  plt.show()
 

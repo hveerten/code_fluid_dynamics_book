@@ -8,10 +8,11 @@
 
 import numpy as np
 
-# resolution settings
+# resolution and other program settings
 RES = 200 # set the numerical resolution, excluding ghost cells
 no_ghosts = 1 # number of ghost cells
 itmax = 100000 # maximum number of iterations, use negative number to ignore
+plot_output = False # set to true to draw a plot
 
 # physics settings
 gamma = 1.4 # adiabatic exponent, assuming adiabatic exponent EOS
@@ -285,25 +286,31 @@ while not finished:
     print("Maximum number of iterations (%d) reached" % iterations)
     finished = True
   
+################################################################################
+# Dump the output on the screen
+
+for i in range(RES):
+  print("%e, %e" % (x[no_ghosts+i] + 0.5*dx, rho[no_ghosts+i]))
 
 ################################################################################
 # everything plotting related
-import matplotlib.pyplot as plt
-import matplotlib.font_manager as fnt
 
-plt.rcParams['font.size'] = 15
-plt.rcParams['font.family'] = 'serif'
-fontprop = fnt.FontProperties()
-fontprop.set_size(13)
+if plot_output == True:
+  import matplotlib.pyplot as plt
+  import matplotlib.font_manager as fnt
 
-plt.plot(x[grid_entries] + 0.5*dx, rho[grid_entries], color= 'blue', marker = '.')
-#plt.plot(x[grid_entries] + 0.5*dx, rhov[grid_entries], color= 'red')
-#plt.plot(x[grid_entries] + 0.5*dx, E[grid_entries], color= 'green')
-#plt.plot(x[grid_entries] + 0.5*dx, p[grid_entries], color= 'brown')
-#plt.plot(x[grid_entries] + 0.5*dx, v[grid_entries], color= 'black')
+  plt.rcParams['font.size'] = 15
+  plt.rcParams['font.family'] = 'serif'
+  fontprop = fnt.FontProperties()
+  fontprop.set_size(13)
 
+  plt.plot(x[grid_entries] + 0.5*dx, rho[grid_entries], color= 'blue', marker = '.')
+  #plt.plot(x[grid_entries] + 0.5*dx, rhov[grid_entries], color= 'red')
+  #plt.plot(x[grid_entries] + 0.5*dx, E[grid_entries], color= 'green')
+  #plt.plot(x[grid_entries] + 0.5*dx, p[grid_entries], color= 'brown')
+  #plt.plot(x[grid_entries] + 0.5*dx, v[grid_entries], color= 'black')
 
-plt.draw()
-plt.show()
+  plt.draw()
+  plt.show()
 
 
