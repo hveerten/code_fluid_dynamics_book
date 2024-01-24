@@ -1,14 +1,17 @@
 # python-hydro
 #
 # An implementation of a finite volume 1D hydro solver in python, done as simple
-# as possible to demonstrate the CFD concepts rather than python. 
+# as possible to demonstrate the CFD concepts rather than python.
+#
+# This version uses the HLL method, the Piecewise Constant Method and a 
+# Forward Euler time step.
 
 import numpy as np
 
 # resolution settings
 RES = 200 # set the numerical resolution, excluding ghost cells
 no_ghosts = 1 # number of ghost cells
-itmax = 100000 # maximum number or iterations, use negative number to ignore
+itmax = 100000 # maximum number of iterations, use negative number to ignore
 
 # physics settings
 gamma = 1.4 # adiabatic exponent, assuming adiabatic exponent EOS
@@ -16,7 +19,7 @@ x0 = 0. # x-coordinate left boundary grid (ghost cells lie beyond this)
 x1 = 1. # x-coordinate right boundary grid (ghost cells lie beyond this)
 t1 = 0.2 # maximum running time
 
-# computed grid global variables
+# Initialize computed grid global variables
 t = 0. # current time
 dt = 0. # current time step size
 iterations = 0 # total number of iterations
