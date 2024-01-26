@@ -15,11 +15,13 @@ A number of python scripts to experiment when learning the concepts of the book 
 
 The folder python-hydro contains various iterations of a one-dimensional hydrodynamics solver using the finite volume method as described in chapter 13 of the book. It should run a shock-tube problem out of the box. The solvers are written to convey the concepts of chapter 13 as clearly as possible, rather than to optimize efficiency in e.g. memory management. The simplest implementation can be found in python-hydro-HLL-PCM-FE.py, the most sophisticated in python-hydro-HLLC-PLM-RK3.py. The filename components have the following meaning:
 
-HLL    HLL-solver
-HLLC   HLLC-solver
-PCM    Piecewise Constant Method
-PLM    Piecewise Linear Method
-FE     Forward Euker
-RK     Runge-Kutta
+<ul>
+  <li>HLL    HLL-solver</li>
+  <li>HLLC   HLLC-solver</li>
+  <li>PCM    Piecewise Constant Method</li>
+  <li>PLM    Piecewise Linear Method</li>
+  <li>FE     Forward Euler</li>
+  <li>RK     Runge-Kutta</li>
+</ul>
 
 ### A C hydrodynamics solver
