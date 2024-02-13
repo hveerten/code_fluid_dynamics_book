@@ -25,3 +25,5 @@ The folder python-hydro contains various iterations of a one-dimensional hydrody
 </ul>
 
 ### A C hydrodynamics solver
+
+[instructions on how to download and compile, along with code tweaks to the content of C-hydro will be added shortly]
