@@ -138,17 +138,17 @@ void set_grid_initial_conditions(grid *g)
         #if fluid_problem_ == 0         // set up some shock tube
 
           #if DIMS_ == 1
-          if (x < 0.5)
+          if (x < 0.3)
           #endif
           #if DIMS_ == 2
-          if (x < 0.5 && y < 0.5)
+          if (x < 0.3 && y < 0.3)
           #endif
           #if DIMS_ == 3
-          if (x < 0.5 && y < 0.5 && z < 0.5)
+          if (x < 0.3 && y < 0.3 && z < 0.3)
           #endif
           {
             g->pr[i_rho_][i_z][i_y][i_x] = 1.;
-            g->pr[i_v_x_][i_z][i_y][i_x] = 0.;
+            g->pr[i_v_x_][i_z][i_y][i_x] = 0.75;
             #if DIMS_ > 1
               g->pr[i_v_y_][i_z][i_y][i_x] = 0.;
             #endif
