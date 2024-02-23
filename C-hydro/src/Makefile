@@ -5,26 +5,25 @@
 ################################################################################
 
 # compiler
-CXX = gcc-10 # a standard open-source C compiler 
-#CXX = pgcc # The NVIDIA ANSI and K&R C compiler, helpful for GPU functionality
-
-# Linker flags:
-LDFLAGS = -lm -lgomp
-  # Common flags:
-  # -lm    includes the math library
-  # -lgomp includes openMP library to access routines 
-  # -acc   includes GPU parallelization through openacc
+#CXX = gcc-10 # a standard open-source C compiler 
+CXX = pgcc # The NVIDIA ANSI and K&R C compiler, helpful for GPU functionality
 
 # Compiler flags
-CXXFLAGS = -Wall -O3 -march=native -mtune=native -fopenmp
-
-#CPPFLAGS = -I/usr/include/mpi -I/usr/include/hdf5/openmpi -Wall -O0 -g -fopenmp
+CXXFLAGS = -Wall -O3 -acc -march=native
   # -Wall         all warnings on
   # -O3           Optimization level 3 ( -O0 needed for debugging purposes )
   # -g            Compile for debugging purposes. Debug code using e.g. valgrind
   # -fopenmp      enable openMP features
   # -march=native perform processor-specific optimization
   # -mtune=native perform processor-specific optimization
+  # -acc          includes GPU parallelization through openacc (for pgcc)
+
+# Linker flags:
+LDFLAGS = -lm -lgomp -acc
+  # Common flags:
+  # -lm    includes the math library
+  # -lgomp includes openMP library to access routines 
+  # -acc   includes openacc library to access routines (for pgcc)
 
 ################################################################################
 

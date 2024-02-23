@@ -29,15 +29,6 @@ void initialize(grid *g)
   g->source = allocate_4D_array_double(no_vars_, GRES_z_, GRES_y_, GRES_x_);
   g->dt_grid = allocate_3D_array_double(GRES_z_, GRES_y_, GRES_x_);
 
-  // print grid initialization settings  
-  printf("# x resolution: = %i\n", RES_x_);
-  #if DIMS_ > 1
-  printf("# y resolution: = %i\n", RES_y_);
-  #endif
-  #if DIMS_ > 2
-  printf("# z resolution: = %i\n", RES_z_);
-  #endif
-  
   // clean out state vectors. Maybe not necessary, but for RK stepping methods
   // our current implementation always updates a q with a weighted contribution
   // from all layers. Even if the weights are zero for entries, this might still
@@ -318,6 +309,15 @@ void print_header_message(grid *p_g, FILE* p_out)
     printf("# Spatial reconstruction done using Piecewise Constant Method.\n");
   #else
     printf("# Spatial reconstruction done using Piecewise Linear Method.\n");
+  #endif
+
+  // print grid initialization settings  
+  printf("# x resolution: = %i\n", RES_x_);
+  #if DIMS_ > 1
+  printf("# y resolution: = %i\n", RES_y_);
+  #endif
+  #if DIMS_ > 2
+  printf("# z resolution: = %i\n", RES_z_);
   #endif
   
   // print messages about the system (settings) running the simulation and
