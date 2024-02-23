@@ -30,24 +30,24 @@ CXXFLAGS = -Wall -O3 -march=native -mtune=native -fopenmp
 ################################################################################
 
 SOURCE  = arraytools.c consprim.c initial_conditions.c IO.c boundary.c \
-  reconstruct.c solver.c source.c toy-hydro.c
+  reconstruct.c solver.c source.c C-hydro.c
 
 OBJECTS = ${SOURCE:.c=.o}                           
 
 ################################################################################
 
-TOY-HYDRO_O = arraytools.o consprim.o initial_conditions.o IO.o boundary.o \
-  reconstruct.o solver.o source.o toy-hydro.o
+C-HYDRO_O = arraytools.o consprim.o initial_conditions.o IO.o boundary.o \
+  reconstruct.o solver.o source.o C-hydro.o
   
 ################################################################################
 
 .c.o: ${SOURCE}
 	${CXX} -c ${CXXFLAGS} $<                             
 
-toy-hydro: ${TOY-HYDRO_O}
-	${CXX} -o ../bin/$@ ${TOY-HYDRO_O} ${LDFLAGS}
+C-hydro: ${C-HYDRO_O}
+	${CXX} -o ../bin/$@ ${C-HYDRO_O} ${LDFLAGS}
 
-all: toy-hydro
+all: C-hydro
 
 clean:                                                
 	rm -f *.o
