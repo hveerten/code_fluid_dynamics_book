@@ -1,17 +1,17 @@
 # python-hydro
 #
 # An implementation of a finite volume 1D hydro solver in python, done as simple
-# as possible to demonstrate the CFD concepts rather than python.
+# as possible to demonstrate the CFD concepts rather than python. 
 #
-# This version uses the HLL method, the Piecewise Constant Method and a 
+# This version uses the HLLC method, the Piecewise Constant Method and a 
 # Forward Euler time step.
 
 import numpy as np
 
-# resolution and other program settings
+# resolution settings and other program settings
 RES = 200 # set the numerical resolution, excluding ghost cells
-no_ghosts = 1 # number of ghost cells
-itmax = 100000 # maximum number of iterations, use negative number to ignore
+no_ghosts = 1 # number of ghost cells, should be 2 for Piecewise Linear Method
+itmax = 100000 # maximum number or iterations, use negative number to ignore
 plot_output = False # set to true to draw a plot
 
 # physics settings
@@ -44,7 +44,6 @@ flux_entries[0:no_ghosts] = False
 flux_entries[no_ghosts:no_ghosts+RES+1] = True
 flux_entries[no_ghosts+RES+1:no_ghosts*2+RES] = False
 
-
 #-------------------------------------------------------------------------------
 
 # initialize the arrays
@@ -68,9 +67,7 @@ for i in range(ig1):
 # concepts, not an optimized code. Therefore, we just declare extra arrays for
 # various auxiliary quantities. quantities with label 'L' are defined just
 # to the left of the left cell boundary of cell i. Quantities with label 'R' are
-# defined just to the right of the left cell boundary of cell i. In our simple
-# case of piecewise flat cell content, we don't really need a separate L and R
-# quantity, but this sets the stage for higher order spatial reconstruction
+# defined just to the right of the left cell boundary of cell i.
 dt_local = np.empty(RES + 2 * no_ghosts) # local CFL condition
 
 rhoL = np.empty(RES + 2 * no_ghosts) # conserved variable density
@@ -102,6 +99,11 @@ FER = np.empty(RES + 2 * no_ghosts) # energy flux left cell boundary
 pstar = np.empty(RES + 2 * no_ghosts) # p-star from HLL method
 SL = np.empty(RES + 2 * no_ghosts) # left wave speed left cell boundary
 SR = np.empty(RES + 2 * no_ghosts) # right wave speed left cell boundary
+Sstar = np.empty(RES + 2 * no_ghosts) # S_star from HLLC method
+
+sa = np.empty(RES + 2 * no_ghosts) # 'raw' slopes, no minmod applied
+sb = np.empty(RES + 2 * no_ghosts) # 'raw' slopes, no minmod applied
+s = np.empty(RES + 2 * no_ghosts) # slopes
 
 #-------------------------------------------------------------------------------
  
@@ -117,7 +119,8 @@ def cons2prim():
   # (rho is both, so does not need separate computing).
   # Acts on ghost cells as well
   v[ig0:ig1] = rhov[ig0:ig1] / rho[ig0:ig1]
-  p[ig0:ig1] = (gamma - 1.) * (E[ig0:ig1] - 0.5 * rhov[ig0:ig1] * v[ig0:ig1]) 
+  p[ig0:ig1] = ((gamma - 1.) * 
+    (E[ig0:ig1] - .5 * rhov[ig0:ig1] * v[ig0:ig1])) 
 
 def set_ghosts():
   # set the conserved quantity values of the ghost cells
@@ -132,15 +135,6 @@ def set_ghosts():
     rho[i1 + i] = rho[i1 - 1]
     rhov[i1 + i] = rhov[i1 - 1]
     E[i1 + i] = E[i1 - 1]
-
-    # reflecting BC
-    #rho[i] = rho[no_ghosts]
-    #rhov[i] = -rhov[no_ghosts]
-    #E[i] = E[no_ghosts]
-    #rho[i1 + i] = rho[i1 - 1]
-    #rhov[i1 + i] = -rhov[i1 - 1]
-    #E[i1 + i] = E[i1 - 1]
-
 
 def set_flux():
   # set states immediately to left and right of cell boundary.
@@ -157,6 +151,7 @@ def set_flux():
   rhoR[i0:i1+1] = rho[i0:i1+1]
   rhovR[i0:i1+1] = rhov[i0:i1+1]
   ER[i0:i1+1] = E[i0:i1+1]
+
 
   # fluxes to left and right
   FrhoL[i0:i1+1] = rhovL[i0:i1+1]
@@ -200,20 +195,59 @@ def set_flux():
   SR[entries] = vR[entries] + csR[entries] * np.sqrt(1 + (gamma + 1) / 
     (2. * gamma) * (pstar[entries]/pR[entries] - 1))
   
+  # HLLC specific, set Sstar
+  Sstar[flux_entries] = (pR[flux_entries] - pL[flux_entries] 
+    + rhoL[flux_entries] * vL[flux_entries] * 
+    (SL[flux_entries] - vL[flux_entries]) 
+    - rhoR[flux_entries] * vR[flux_entries] *
+    (SR[flux_entries] - vR[flux_entries])) / (
+    rhoL[flux_entries] * (SL[flux_entries] - vL[flux_entries])
+    - rhoR[flux_entries] * (SR[flux_entries] - vR[flux_entries]))
+  
   # set flux across boundary option one, both waves move to the right
-  entries = flux_entries & (SL > 0) & (SR > 0)
+  entries = flux_entries & (SL > 0)
+  #print("both right:", entries)
   Frho[entries] = FrhoL[entries]
   Frhov[entries] = FrhovL[entries]
   FE[entries] = FEL[entries]
   
   # set flux across boundary option two, both waves move to the left 
-  entries = flux_entries & (SL < 0) & (SR < 0)
+  entries = flux_entries & (SR < 0)
+  #print("both left:", entries)
   Frho[entries] = FrhoR[entries]
   Frhov[entries] = FrhovR[entries]
   FE[entries] = FER[entries]
+
+  # set flux across boundary option three, left starred HLLC state
+  entries = ~(SL > 0) & ~(SR < 0) & (Sstar > 0) & flux_entries
+  #print("HLLC left:", entries)
+  Frho[entries] = FrhoL[entries] + SL[entries] * ( rhoL[entries] * 
+    (SL[entries] - vL[entries]) / (SL[entries] - Sstar[entries]) - 
+    rhoL[entries])
+  Frhov[entries] = FrhovL[entries] + SL[entries] * (rhoL[entries] *
+    (SL[entries] - vL[entries])/(SL[entries] - Sstar[entries]) * Sstar[entries] 
+    - rhovL[entries])
+  FE[entries] = (FEL[entries] + SL[entries] * (Sstar[entries] - vL[entries]) /
+    (SL[entries] - Sstar[entries]) * (EL[entries] + pL[entries] + rhoL[entries]
+    * Sstar[entries] * (SL[entries] - vL[entries]))) 
+     
+  # set flux across boundary option four, right starred HLLC state
+  entries = ~(SL > 0) & ~(SR < 0) & ~(Sstar > 0) & flux_entries
+  #print("HLLC right:", entries)
+  Frho[entries] = FrhoR[entries] + SR[entries] * ( rhoR[entries] * 
+    (SR[entries] - vR[entries]) / (SR[entries] - Sstar[entries]) - 
+    rhoR[entries])
+  Frhov[entries] = FrhovR[entries] + SR[entries] * (rhoR[entries] *
+    (SR[entries] - vR[entries])/(SR[entries] - Sstar[entries]) * Sstar[entries] 
+    - rhovR[entries])
+  FE[entries] = (FER[entries] + SR[entries] * (Sstar[entries] - vR[entries]) /
+    (SR[entries] - Sstar[entries]) * (ER[entries] + pR[entries] + rhoR[entries]
+    * Sstar[entries] * (SR[entries] - vR[entries]))) 
   
+  """
   # set flux across boundary option three, draw upon starred HLL state
-  entries = ~((SL > 0) & (SR > 0)) & ~((SL < 0) & (SR < 0)) & flux_entries
+  entries = ~(SL > 0) & ~(SR < 0) & flux_entries
+  #print("HLL", entries)
   Frho[entries] = (SR[entries] * FrhoL[entries] - SL[entries] * FrhoR[entries]
     + SR[entries] * SL[entries] * (rhoR[entries] - rhoL[entries])) / (
     SR[entries] - SL[entries])
@@ -223,6 +257,17 @@ def set_flux():
   FE[entries] = (SR[entries] * FEL[entries] - SL[entries] * FER[entries]
     + SR[entries] * SL[entries] * (ER[entries] - EL[entries])) / (
     SR[entries] - SL[entries])
+  """
+  
+  """
+  print ("Frho:", Frho)
+  print ("FrhoL:", FrhoL)
+  print ("FrhoR:", FrhoR)
+  print ("SL:", SL)
+  print ("SR:", SR)
+  print ("Sstar:", Sstar)
+  #print ("------")
+  """
 
 def set_dt():
   # set the allowed timestep according to CFL condition
@@ -236,10 +281,11 @@ def set_dt():
     finished = True
 
 def update_grid():
+
   rho[i0:i1] = rho[i0:i1] - dt / dx * (Frho[i0+1:i1+1] - Frho[i0:i1])
-  rhov[i0:i1] = rhov[i0:i1] - dt / dx * (Frhov[i0+1:i1+1] - Frhov[i0:i1])
+  rhov[i0:i1] = rhov[i0:i1] - dt/dx * (Frhov[i0+1:i1+1] - Frhov[i0:i1])
   E[i0:i1] = E[i0:i1] - dt / dx * (FE[i0+1:i1+1] - FE[i0:i1])
-  
+
 #-------------------------------------------------------------------------------
   
 # INITIALIZATION: Set up a shock tube, using the primitive variables rho, v, p
@@ -285,7 +331,7 @@ while not finished:
   if iterations == itmax:
     print("Maximum number of iterations (%d) reached" % iterations)
     finished = True
-  
+
 ################################################################################
 # Dump the output on the screen
 
@@ -312,4 +358,4 @@ if plot_output == True:
 
   plt.draw()
   plt.show()
- 
+
