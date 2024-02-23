@@ -10,23 +10,21 @@ CXX = gcc-10 # a standard open-source C compiler
 
 # Linker flags:
 LDFLAGS = -lm -lgomp
-#LDFLAGS = -lm -acc
-  # -lm includes the math library
+  # Common flags:
+  # -lm    includes the math library
   # -lgomp includes openMP library to access routines 
+  # -acc   includes GPU parallelization through openacc
 
 # Compiler flags
 CXXFLAGS = -Wall -O3 -march=native -mtune=native -fopenmp
-#CXXFLAGS = -O3 -fast -acc=gpu -Minline
-#XXFLAGS = -g -O0 -acc
-#CXXFLAGS = -Wall -O0 -g
 
 #CPPFLAGS = -I/usr/include/mpi -I/usr/include/hdf5/openmpi -Wall -O0 -g -fopenmp
-#CPPFLAGS = -I/usr/include/mpi -I/usr/include/hdf5/openmpi -Wall -O3 -march=native -mtune=native
-  # -Wall all warnings on
-  # -O3 Optimization level 3 ( -O0 needed for debugging purposes )
-  # ad -g to compile for debugging purposes. Debug code using valgrind
-  # -fopenmp enable openMP features
-  # -march=native and -mtune=native perform processor-specific optimization
+  # -Wall         all warnings on
+  # -O3           Optimization level 3 ( -O0 needed for debugging purposes )
+  # -g            Compile for debugging purposes. Debug code using e.g. valgrind
+  # -fopenmp      enable openMP features
+  # -march=native perform processor-specific optimization
+  # -mtune=native perform processor-specific optimization
 
 ################################################################################
 
