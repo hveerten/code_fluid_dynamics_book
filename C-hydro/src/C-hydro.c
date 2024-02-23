@@ -1,4 +1,4 @@
-// toy-hydro. A simple fixed-mesh C-based hydrodynamics solver
+// C-hydro. A simple fixed-mesh C-based hydrodynamics solver
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -302,7 +302,7 @@ void print_header_message(grid *p_g, FILE* p_out)
 {
   // print various opening messages, title of program and of simulation run
 
-  fprintf(p_out, "# toy-hydro\n");
+  fprintf(p_out, "# C-hydro\n");
   fprintf(p_out, "# running set-up labeled: %s\n", p_g->title);
   fprintf(p_out, "# Adiabatic exponent set to: %f\n", GAMMA_AD_);
   

@@ -5,13 +5,14 @@
 ################################################################################
 
 # compiler
-CXX = gcc-10
-#CXX = pgcc
+CXX = gcc-10 # a standard open-source C compiler 
+#CXX = pgcc # The NVIDIA ANSI and K&R C compiler, helpful for GPU functionality
 
 # Linker flags:
 LDFLAGS = -lm -lgomp
 #LDFLAGS = -lm -acc
-#-foffload=nvptx-none
+  # -lm includes the math library
+  # -lgomp includes openMP library to access routines 
 
 # Compiler flags
 CXXFLAGS = -Wall -O3 -march=native -mtune=native -fopenmp
