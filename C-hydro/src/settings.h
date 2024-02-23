@@ -49,9 +49,9 @@
 #define GAMMA_AD_ 1.4
 
 // flags to revert to lowest order methods
-#define disable_RK_ true // drop from 3rd order Runge-Kutta to first order 
+#define disable_RK_ false // drop from 3rd order Runge-Kutta to first order 
  // forward Euler timestep if true
-#define disable_PLM_ true // drop to piecewise constant if true
+#define disable_PLM_ false // drop to piecewise constant if true
 #define use_source_ 0 // 1 // non-zero number to use source
 
 //------------------------------------------------------------------------------

@@ -305,6 +305,20 @@ void print_header_message(grid *p_g, FILE* p_out)
   fprintf(p_out, "# C-hydro\n");
   fprintf(p_out, "# running set-up labeled: %s\n", p_g->title);
   fprintf(p_out, "# Adiabatic exponent set to: %f\n", GAMMA_AD_);
+
+  if (!use_source_) printf("# Source term disabled.\n");
+
+  #if disable_RK_
+    printf("# Time step is Forward Euler.\n");
+  #else
+    printf("# Time step is 3rd Order Runge-Kutta.\n");
+  #endif
+
+  #if disable_PLM_
+    printf("# Spatial reconstruction done using Piecewise Constant Method.\n");
+  #else
+    printf("# Spatial reconstruction done using Piecewise Linear Method.\n");
+  #endif
   
   // print messages about the system (settings) running the simulation and
   fprintf(p_out, "#--------------------------------------------------------\n");
@@ -335,6 +349,7 @@ void print_header_message(grid *p_g, FILE* p_out)
     " %ld MB, %ld GB\n", mem_use, mem_use / 1024, mem_use / 1024 / 1024, 
     mem_use / 1024 / 1024 / 1024);
 
+
   fprintf(p_out, "#--------------------------------------------------------\n");
 
 }
@@ -361,8 +376,6 @@ int main()
   print_header_message(&g, stdout);
   
   //stoprun = true;
-  
-  if (!use_source_) printf("# Source term disabled.\n");
   
   // save an initial state data dump
   sprintf(filename, "out%04d.txt", i_snapshot);
