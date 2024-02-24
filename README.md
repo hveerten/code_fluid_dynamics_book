@@ -1,7 +1,7 @@
 # Introduction to Fluid Dynamics in Physics and Astrophysics 
 ## H.J. van Eerten (2024, CRC Press, Taylor & Francis Group)
 
-This repository includes code and scripts for to accompany the textbook. Currently the following content is included:
+This repository includes code and scripts to accompany the textbook [Introduction to Fluid Dynamics in Physics and Astrophysics](https://www.taylorfrancis.com/books/mono/10.1201/9781003095088/introduction-fluid-dynamics-physics-astrophysics-hendrik-jan-van-eerten). Currently the following content is included:
 
 ### Errata
 
