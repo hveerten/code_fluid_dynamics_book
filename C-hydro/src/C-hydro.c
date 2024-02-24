@@ -134,7 +134,10 @@ void apply(grid *g, int RK)
 
   // declare variables for values differing per RK step
   int i_to;
-  double Cq0, Cq1, Cq2;
+  double Cq0;
+  #if !disable_RK_
+    double Cq1, Cq2;
+  #endif
   double Cfs;
 
   // set the weight values for the different RK steps of 3rd order RK method
@@ -143,37 +146,37 @@ void apply(grid *g, int RK)
   {
     i_to = 0;
     Cq0 = 1.;
-    Cq1 = 0.;
-    Cq2 = 0.;
     Cfs = 1.;
   }
   
-  if (RK == 0)
-  {
-    i_to = 1;
-    Cq0 = 1.;
-    Cq1 = 0.;
-    Cq2 = 0.;
-    Cfs = 1.;
-  }
+  #if !disable_RK_
+    if (RK == 0)
+    {
+      i_to = 1;
+      Cq0 = 1.;
+      Cq1 = 0.;
+      Cq2 = 0.;
+      Cfs = 1.;
+    }
   
-  if (RK == 1)
-  {
-    i_to = 2;
-    Cq0 = 3./4.;
-    Cq1 = 1./4.;
-    Cq2 = 0.;
-    Cfs = 1./4.;
-  }
+    if (RK == 1)
+    {
+      i_to = 2;
+      Cq0 = 3./4.;
+      Cq1 = 1./4.;
+      Cq2 = 0.;
+      Cfs = 1./4.;
+    }
   
-  if (RK == 2)
-  {
-    i_to = 0;
-    Cq0 = 1./3.;
-    Cq1 = 0.;
-    Cq2 = 2./3.;
-    Cfs = 2./3.;
-  }
+    if (RK == 2)
+    {
+      i_to = 0;
+      Cq0 = 1./3.;
+      Cq1 = 0.;
+      Cq2 = 2./3.;
+      Cfs = 2./3.;
+    }
+  #endif
   
   //----------------------------------------------------------------------------
 
@@ -215,9 +218,11 @@ void apply(grid *g, int RK)
           int i_out = id5(i_to, i_var, i_z, i_y, i_x);
           g->q_flat[i_out] = Cq0 * g->q_flat[id5(0, i_var, i_z, i_y, i_x)];
 
-          g->q_flat[i_out] += Cq1 * g->q_flat[id5(1, i_var, i_z, i_y, i_x)];
+          #if !disable_RK_
+            g->q_flat[i_out] += Cq1 * g->q_flat[id5(1, i_var, i_z, i_y, i_x)];
 
-          g->q_flat[i_out] += Cq2 * g->q_flat[id5(2, i_var, i_z, i_y, i_x)];
+            g->q_flat[i_out] += Cq2 * g->q_flat[id5(2, i_var, i_z, i_y, i_x)];  
+          #endif
 
           g->q_flat[i_out] += Cfs * g->dt / dx *
             (g->F_x_flat[id4(i_var, i_z, i_y, i_x)] - g->F_x_flat[id4(i_var, i_z, i_y, i_x+1)]);
@@ -423,7 +428,7 @@ int main()
       #endif
       if (use_source_) set_source(&g, 0);
 
-      apply(&g, -1); // forward Euler step, y flux
+      apply(&g, -1); // apply forward Euler step
       
     }
     else

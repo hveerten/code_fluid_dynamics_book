@@ -9,14 +9,14 @@ CXX = gcc-10 # a standard open-source C compiler
 #CXX = pgcc # The NVIDIA ANSI and K&R C compiler, helpful for GPU functionality
 
 # Compiler flags
-CXXFLAGS = -Wall -O3 -march=native -mtune=native # gcc-10 version
+CXXFLAGS = -Wall -O3 -march=native -fopenmp -mtune=native # gcc-10 version
 #CXXFLAGS = -Wall -O3 -acc -march=native # pgcc version
   # -Wall         all warnings on
   # -O3           Optimization level 3 ( -O0 needed for debugging purposes )
   # -g            Compile for debugging purposes. Debug code using e.g. valgrind
   # -fopenmp      enable openMP features
   # -march=native perform processor-specific optimization
-  # -mtune=native perform processor-specific optimization
+  # -mtune=native perform processor-specific optimization (for gcc-10)
   # -acc          includes GPU parallelization through openacc (for pgcc)
 
 # Linker flags:

@@ -11,8 +11,8 @@
 
 #define DIMS_   1 // number of dimensions
 #define RES_x_  200 // x-direction resolution, not counting ghost zones
-#define RES_y_  50 // y-direction resolution, not counting ghost zones
-#define RES_z_  50 // z-direction resolution, not counting ghost zones
+#define RES_y_  200 // y-direction resolution, not counting ghost zones
+#define RES_z_  200 // z-direction resolution, not counting ghost zones
 #define ghosts_ 2  // number of ghost cells on a side
 #define it_max_ 1000000 // maximum number of iterations
 
