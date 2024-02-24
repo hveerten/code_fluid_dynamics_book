@@ -9,7 +9,7 @@ The file errata.pdf contains a list of typos in the book.
 
 ### Various scripts
 
-A number of python scripts to experiment when learning the concepts of the book can be found in the folder various_scripts
+A number of python scripts to experiment with when learning the concepts of the book can be found in the folder "various_scripts".
 
 ### A python version of a hydrodynamics solver
 
