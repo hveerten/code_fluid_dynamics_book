@@ -8,11 +8,11 @@
 
 import numpy as np
 
-# resolution and other program settings
+# resolution settings and other program settings
 RES = 200 # set the numerical resolution, excluding ghost cells
-no_ghosts = 1 # number of ghost cells
+no_ghosts = 1 # number of ghost cells, should be 2 for Piecewise Linear Method
 itmax = 100000 # maximum number of iterations, use negative number to ignore
-plot_output = False # set to true to draw a plot
+plot_output = True # set to True if you wish a figure to be shown at completion
 
 # physics settings
 gamma = 1.4 # adiabatic exponent, assuming adiabatic exponent EOS
@@ -106,7 +106,7 @@ SR = np.empty(RES + 2 * no_ghosts) # right wave speed left cell boundary
 #-------------------------------------------------------------------------------
  
 def prim2cons():
-  # compute conserved quantities rho, S, E based on primitive rho, p, v
+  # compute conserved quantities rho, S = rho v, E based on primitive rho, p, v
   # (rho is both, so does not need separate computing). 
   # Only acts on non-ghost cells.
   rhov[i0:i1] = rho[i0:i1] * v[i0:i1]
@@ -132,15 +132,6 @@ def set_ghosts():
     rho[i1 + i] = rho[i1 - 1]
     rhov[i1 + i] = rhov[i1 - 1]
     E[i1 + i] = E[i1 - 1]
-
-    # reflecting BC
-    #rho[i] = rho[no_ghosts]
-    #rhov[i] = -rhov[no_ghosts]
-    #E[i] = E[no_ghosts]
-    #rho[i1 + i] = rho[i1 - 1]
-    #rhov[i1 + i] = -rhov[i1 - 1]
-    #E[i1 + i] = E[i1 - 1]
-
 
 def set_flux():
   # set states immediately to left and right of cell boundary.
@@ -290,7 +281,9 @@ while not finished:
 # Dump the output on the screen
 
 for i in range(RES):
-  print("%e, %e" % (x[no_ghosts+i] + 0.5*dx, rho[no_ghosts+i]))
+  print("%d, %e, %e, %e, %e, %e, %e" % 
+    (i, x[no_ghosts+i] + 0.5*dx, rho[no_ghosts+i], rhov[no_ghosts+i], 
+    E[no_ghosts+i], v[no_ghosts+i], p[no_ghosts+i]))
 
 ################################################################################
 # everything plotting related
@@ -305,10 +298,10 @@ if plot_output == True:
   fontprop.set_size(13)
 
   plt.plot(x[grid_entries] + 0.5*dx, rho[grid_entries], color= 'blue', marker = '.')
-  #plt.plot(x[grid_entries] + 0.5*dx, rhov[grid_entries], color= 'red')
-  #plt.plot(x[grid_entries] + 0.5*dx, E[grid_entries], color= 'green')
-  #plt.plot(x[grid_entries] + 0.5*dx, p[grid_entries], color= 'brown')
-  #plt.plot(x[grid_entries] + 0.5*dx, v[grid_entries], color= 'black')
+  #plt.plot(x[grid_entries] + 0.5*dx, rhov[grid_entries], color= 'red', marker = '.')
+  #plt.plot(x[grid_entries] + 0.5*dx, E[grid_entries], color= 'green', marker = '.')
+  #plt.plot(x[grid_entries] + 0.5*dx, p[grid_entries], color= 'brown', marker = '.')
+  #plt.plot(x[grid_entries] + 0.5*dx, v[grid_entries], color= 'black', marker = '.')
 
   plt.draw()
   plt.show()

@@ -12,7 +12,7 @@ import numpy as np
 RES = 200 # set the numerical resolution, excluding ghost cells
 no_ghosts = 1 # number of ghost cells, should be 2 for Piecewise Linear Method
 itmax = 100000 # maximum number or iterations, use negative number to ignore
-plot_output = False # set to true to draw a plot
+plot_output = True # set to True if you wish a figure to be shown at completion
 
 # physics settings
 gamma = 1.4 # adiabatic exponent, assuming adiabatic exponent EOS
@@ -108,7 +108,7 @@ s = np.empty(RES + 2 * no_ghosts) # slopes
 #-------------------------------------------------------------------------------
  
 def prim2cons():
-  # compute conserved quantities rho, S, E based on primitive rho, p, v
+  # compute conserved quantities rho, S = rho v, E based on primitive rho, p, v
   # (rho is both, so does not need separate computing). 
   # Only acts on non-ghost cells.
   rhov[i0:i1] = rho[i0:i1] * v[i0:i1]
@@ -243,31 +243,6 @@ def set_flux():
   FE[entries] = (FER[entries] + SR[entries] * (Sstar[entries] - vR[entries]) /
     (SR[entries] - Sstar[entries]) * (ER[entries] + pR[entries] + rhoR[entries]
     * Sstar[entries] * (SR[entries] - vR[entries]))) 
-  
-  """
-  # set flux across boundary option three, draw upon starred HLL state
-  entries = ~(SL > 0) & ~(SR < 0) & flux_entries
-  #print("HLL", entries)
-  Frho[entries] = (SR[entries] * FrhoL[entries] - SL[entries] * FrhoR[entries]
-    + SR[entries] * SL[entries] * (rhoR[entries] - rhoL[entries])) / (
-    SR[entries] - SL[entries])
-  Frhov[entries] = (SR[entries] * FrhovL[entries] - SL[entries] *FrhovR[entries]
-    + SR[entries] * SL[entries] * (rhovR[entries] - rhovL[entries])) / (
-    SR[entries] - SL[entries])
-  FE[entries] = (SR[entries] * FEL[entries] - SL[entries] * FER[entries]
-    + SR[entries] * SL[entries] * (ER[entries] - EL[entries])) / (
-    SR[entries] - SL[entries])
-  """
-  
-  """
-  print ("Frho:", Frho)
-  print ("FrhoL:", FrhoL)
-  print ("FrhoR:", FrhoR)
-  print ("SL:", SL)
-  print ("SR:", SR)
-  print ("Sstar:", Sstar)
-  #print ("------")
-  """
 
 def set_dt():
   # set the allowed timestep according to CFL condition
@@ -336,7 +311,9 @@ while not finished:
 # Dump the output on the screen
 
 for i in range(RES):
-  print("%e, %e" % (x[no_ghosts+i] + 0.5*dx, rho[no_ghosts+i]))
+  print("%d, %e, %e, %e, %e, %e, %e" % 
+    (i, x[no_ghosts+i] + 0.5*dx, rho[no_ghosts+i], rhov[no_ghosts+i], 
+    E[no_ghosts+i], v[no_ghosts+i], p[no_ghosts+i]))
 
 ################################################################################
 # everything plotting related
@@ -350,11 +327,11 @@ if plot_output == True:
   fontprop = fnt.FontProperties()
   fontprop.set_size(13)
 
-  plt.plot(x[grid_entries] + 0.5*dx, rho[grid_entries], color= 'blue', marker = '.')
-  #plt.plot(x[grid_entries] + 0.5*dx, rhov[grid_entries], color= 'red')
-  #plt.plot(x[grid_entries] + 0.5*dx, E[grid_entries], color= 'green')
-  #plt.plot(x[grid_entries] + 0.5*dx, p[grid_entries], color= 'brown')
-  #plt.plot(x[grid_entries] + 0.5*dx, v[grid_entries], color= 'black')
+  #plt.plot(x[grid_entries] + 0.5*dx, rho[grid_entries], color= 'blue', marker = '.')
+  #plt.plot(x[grid_entries] + 0.5*dx, rhov[grid_entries], color= 'red', marker = '.')
+  #plt.plot(x[grid_entries] + 0.5*dx, E[grid_entries], color= 'green', marker = '.')
+  plt.plot(x[grid_entries] + 0.5*dx, p[grid_entries], color= 'brown', marker = '.')
+  #plt.plot(x[grid_entries] + 0.5*dx, v[grid_entries], color= 'black', marker = '.')
 
   plt.draw()
   plt.show()
