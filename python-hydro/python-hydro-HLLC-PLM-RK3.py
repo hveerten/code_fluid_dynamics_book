@@ -2,13 +2,17 @@
 #
 # An implementation of a finite volume 1D hydro solver in python, done as simple
 # as possible to demonstrate the CFD concepts rather than python. 
+#
+# This version uses the HLLC method, the Piecewise Linear Method and a 
+# 3rd order Runge-Kutta time step.
 
 import numpy as np
 
-# resolution settings
+# resolution settings and other program settings
 RES = 200 # set the numerical resolution, excluding ghost cells
 no_ghosts = 2 # number of ghost cells, should be 2 for Piecewise Linear Method
 itmax = 100000 # maximum number or iterations, use negative number to ignore
+plot_output = True # set to True if you wish a figure to be shown at completion
 
 # physics settings
 gamma = 1.4 # adiabatic exponent, assuming adiabatic exponent EOS
@@ -16,7 +20,7 @@ x0 = 0. # x-coordinate left boundary grid (ghost cells lie beyond this)
 x1 = 1. # x-coordinate right boundary grid (ghost cells lie beyond this)
 t1 = 0.2 # maximum running time
 
-# computed grid global variables
+# Initialize computed grid global variables
 t = 0. # current time
 dt = 0. # current time step size
 iterations = 0 # total number of iterations
@@ -104,7 +108,7 @@ s = np.empty(RES + 2 * no_ghosts) # slopes
 #-------------------------------------------------------------------------------
  
 def prim2cons(RK = 0):
-  # compute conserved quantities rho, S, E based on primitive rho, p, v
+  # compute conserved quantities rho, S = rho v, E based on primitive rho, p, v
   # (rho is both, so does not need separate computing). 
   # Only acts on non-ghost cells.
   rhov[i0:i1, RK] = rho[i0:i1, RK] * v[i0:i1]
@@ -191,22 +195,6 @@ def set_LR_states(RK = 0):
   rhovR[i0:i1+1] = rhoR[i0:i1+1] * vR[i0:i1+1]
   EL[i0:i1+1] = 0.5 * vL[i0:i1+1] * rhovL[i0:i1+1] + pL[i0:i1+1] / (gamma - 1.)
   ER[i0:i1+1] = 0.5 * vR[i0:i1+1] * rhovR[i0:i1+1] + pR[i0:i1+1] / (gamma - 1.)
-
-  """
-  print ("-------")
-  print ("RK = ", RK)
-  print(entries) 
-  print ("sa:", sa)
-  print ("sb:", sb)
-  print ("s:", s)
-  print ("rho:", rho[:,RK])
-  print ("left states:")
-  print ("EL:", EL)
-  print ("pL:", pL)
-  print ("rhovL:", rhovL)
-  print ("rhoL:", rhoL)
-  """
-  
 
 def set_flux(RK = 0):
   # set states immediately to left and right of cell boundary.
@@ -304,31 +292,6 @@ def set_flux(RK = 0):
     (SR[entries] - Sstar[entries]) * (ER[entries] + pR[entries] + rhoR[entries]
     * Sstar[entries] * (SR[entries] - vR[entries]))) 
   
-  """
-  # set flux across boundary option three, draw upon starred HLL state
-  entries = ~(SL > 0) & ~(SR < 0) & flux_entries
-  #print("HLL", entries)
-  Frho[entries] = (SR[entries] * FrhoL[entries] - SL[entries] * FrhoR[entries]
-    + SR[entries] * SL[entries] * (rhoR[entries] - rhoL[entries])) / (
-    SR[entries] - SL[entries])
-  Frhov[entries] = (SR[entries] * FrhovL[entries] - SL[entries] *FrhovR[entries]
-    + SR[entries] * SL[entries] * (rhovR[entries] - rhovL[entries])) / (
-    SR[entries] - SL[entries])
-  FE[entries] = (SR[entries] * FEL[entries] - SL[entries] * FER[entries]
-    + SR[entries] * SL[entries] * (ER[entries] - EL[entries])) / (
-    SR[entries] - SL[entries])
-  """
-  
-  """
-  print ("Frho:", Frho)
-  print ("FrhoL:", FrhoL)
-  print ("FrhoR:", FrhoR)
-  print ("SL:", SL)
-  print ("SR:", SR)
-  print ("Sstar:", Sstar)
-  #print ("------")
-  """
-
 def set_dt():
   # set the allowed timestep according to CFL condition
   dt_local[i0:i1] = dx / (np.absolute(v[i0:i1]) + 
@@ -407,7 +370,6 @@ def update_grid(RKstep = -1):
         - 2 * dt / dx * (FE[i0+1:i1+1] - FE[i0:i1])/3.)
     
 #-------------------------------------------------------------------------------
-  
 # INITIALIZATION: Set up a shock tube, using the primitive variables rho, v, p
 
 xbound = 0.3
@@ -417,6 +379,7 @@ p[x < xbound] = 1.
 rho[x >= xbound] = 0.125 
 v[x >= xbound] = 0.
 p[x >= xbound] = 0.1
+t1 = 0.2 # maximum running time, overruled
 
 
 """
@@ -433,12 +396,11 @@ t1 = 0.012 # overrule the value provided at the start of the source code
 prim2cons(0)
 
 #-------------------------------------------------------------------------------
-#itmax = 5
 
 # run solver
 while not finished:
 
-  # Forward Euler scheme
+  # Forward Euler scheme, not in use by default
   #set_ghosts(0)
   #cons2prim(0)
   #set_dt()
@@ -476,31 +438,32 @@ while not finished:
 cons2prim(0)
 
 ################################################################################
-# everything plotting related
-import matplotlib.pyplot as plt
-import matplotlib.font_manager as fnt
-
-plt.rcParams['font.size'] = 15
-plt.rcParams['font.family'] = 'serif'
-fontprop = fnt.FontProperties()
-fontprop.set_size(13)
+# Dump the output on the screen
 
 for i in range(RES):
-#  print("%e, %e" % (x[no_ghosts+i] + 0.5*dx, rho[no_ghosts+i,0]))
-  print("%e, %e" % (x[no_ghosts+i] + 0.5*dx, p[no_ghosts+i]/rho[no_ghosts+i,0]/(gamma-1.)))
-#exit()
+  print("%d, %e, %e, %e, %e, %e, %e" % 
+    (i, x[no_ghosts+i] + 0.5*dx, rho[no_ghosts+i, 0], rhov[no_ghosts+i, 0], 
+    E[no_ghosts+i, 0], v[no_ghosts+i], p[no_ghosts+i]))
 
-plt.plot(x[grid_entries] + 0.5*dx, rho[grid_entries, 0], 
-  color= 'blue', marker = '.')
-#plt.plot(x[grid_entries] + 0.5*dx, rhov[grid_entries, 0], color= 'red')
-#plt.plot(x[grid_entries] + 0.5*dx, E[grid_entries, 0], color= 'green')
-#plt.plot(x[grid_entries] + 0.5*dx, p[grid_entries], color= 'brown')
-#plt.plot(x[grid_entries] + 0.5*dx, v[grid_entries], color= 'black')
+################################################################################
+# everything plotting related
 
-#plt.plot(x[grid_entries] + 0.5*dx, p[grid_entries] / rho[grid_entries, 0] / (gamma-1.), color= 'brown')
+if plot_output == True:
+  import matplotlib.pyplot as plt
+  import matplotlib.font_manager as fnt
 
+  plt.rcParams['font.size'] = 15
+  plt.rcParams['font.family'] = 'serif'
+  fontprop = fnt.FontProperties()
+  fontprop.set_size(13)
 
-plt.draw()
-plt.show()
+  plt.plot(x[grid_entries] + 0.5*dx, rho[grid_entries, 0], color= 'blue', marker = '.')
+  #plt.plot(x[grid_entries] + 0.5*dx, rhov[grid_entries, 0], color= 'red', marker = '.')
+  #plt.plot(x[grid_entries] + 0.5*dx, E[grid_entries, 0], color= 'green', marker = '.')
+  #plt.plot(x[grid_entries] + 0.5*dx, p[grid_entries], color= 'brown', marker = '.')
+  #plt.plot(x[grid_entries] + 0.5*dx, v[grid_entries], color= 'black', marker = '.')
+
+  plt.draw()
+  plt.show()
 
 
